@@ -402,6 +402,4 @@ ImmunoACT is India's first indigenous CAR-T cell therapy company, dedicated to m
 
 **Built with ❤️ by the ImmunoACT Software Developer**
 
-*This backend service is designed to handle sensitive healthcare data with the highest standards of security and compliance. All development and deployment practices follow healthcare industry best practices and regulatory requirements.*#   I m m u n o A C T - P o r t f o l i o _ B a c k e n d 
- 
- 
+*This backend service is designed to handle sensitive healthcare data with the highest standards of security and compliance. All development and deployment practices follow healthcare industry best practices and regulatory requirements.*#
