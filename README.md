@@ -238,54 +238,6 @@ All actions are logged with:
 - Action details
 - Request/response data (sanitized)
 
-## 🌐 Environment Variables
-
-Create a `.env` file with the following configuration:
-
-```env
-# Server Configuration
-NODE_ENV=production
-PORT=5000
-API_VERSION=v1
-
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=immunoact_prod
-DB_USER=immunoact_user
-DB_PASSWORD=secure_password_change_me
-DB_ENCRYPTION_KEY=your-64-character-encryption-key-here
-
-# JWT Configuration
-JWT_SECRET=your-super-secure-jwt-secret-key-here
-JWT_EXPIRE=24h
-
-# Email Configuration
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@immunoact.com
-SMTP_PASS=your-app-password
-FROM_EMAIL=noreply@immunoact.com
-ADMIN_EMAIL=admin@immunoact.com
-
-# Security Configuration
-BCRYPT_ROUNDS=12
-RATE_LIMIT_WINDOW=15
-RATE_LIMIT_MAX=100
-
-# CORS Configuration
-FRONTEND_URL=https://your-frontend-domain.com
-
-# Healthcare Compliance
-HIPAA_COMPLIANT=true
-DATA_RETENTION_DAYS=2555
-AUDIT_LOG_ENABLED=true
-
-# Logging Configuration
-LOG_LEVEL=info
-LOG_FILE=logs/app.log
-```
-
 ## 🔧 Available Scripts
 
 | Script | Description |
@@ -440,19 +392,6 @@ We welcome contributions to improve the ImmunoACT backend:
 - Follow principle of least privilege
 - Implement proper error handling
 
-## 📄 License
-
-This project is proprietary software owned by ImmunoACT. All rights reserved.
-
-## 📞 Support
-
-For technical support or questions about this backend service:
-
-- **Email**: tech-support@immunoact.com
-- **Documentation**: [Internal API Docs](link-to-internal-docs)
-- **Issue Tracker**: [GitHub Issues](link-to-issues)
-- **Security Issues**: security@immunoact.com
-
 ## 🏥 About ImmunoACT
 
 ImmunoACT is India's first indigenous CAR-T cell therapy company, dedicated to making advanced cancer treatments accessible and affordable. Our mission is to transform cancer care through innovative cellular therapies and personalized medicine.
@@ -461,7 +400,8 @@ ImmunoACT is India's first indigenous CAR-T cell therapy company, dedicated to m
 
 ---
 
-**Built with ❤️ by the ImmunoACT Development Team**
+**Built with ❤️ by the ImmunoACT Software Developer**
 
-*This backend service is designed to handle sensitive healthcare data with the highest standards of security and compliance. All development and deployment practices follow healthcare industry best practices and regulatory requirements.*#   I m m u n o A C T - P o r t f o l i o _ B a c k e n d  
+*This backend service is designed to handle sensitive healthcare data with the highest standards of security and compliance. All development and deployment practices follow healthcare industry best practices and regulatory requirements.*#   I m m u n o A C T - P o r t f o l i o _ B a c k e n d 
+ 
  
