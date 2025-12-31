@@ -5,6 +5,7 @@ const { Permission, RolePermission } = require('./Permission');
 const Media = require('./Media');
 const Publication = require('./Publication');
 const Career = require('./Career');
+const Hospital = require('./Hospital');
 
 // Define associations
 User.hasMany(ContactForm, {
@@ -90,5 +91,6 @@ module.exports = {
   RolePermission,
   Media,
   Publication,
-  Career
+  Career,
+  Hospital
 };

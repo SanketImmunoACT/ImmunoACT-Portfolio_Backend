@@ -24,6 +24,7 @@ const careerRoutes = require('./routes/careers');
 const publicRoutes = require('./routes/public');
 const uploadRoutes = require('./routes/upload');
 const searchRoutes = require('./routes/search');
+const hospitalRoutes = require('./routes/hospitals');
 
 // Initialize Express app
 const app = express();
@@ -97,6 +98,7 @@ app.use('/api/v1/publications', publicationRoutes);
 app.use('/api/v1/careers', careerRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/search', searchRoutes);
+app.use('/api/v1/hospitals', hospitalRoutes);
 
 // Public routes (no authentication required)
 app.use('/api/v1/public', publicRoutes);
@@ -121,6 +123,7 @@ app.get('/', (req, res) => {
       careers: '/api/v1/careers',
       upload: '/api/v1/upload',
       search: '/api/v1/search',
+      hospitals: '/api/v1/hospitals',
       public: '/api/v1/public'
     }
   });
@@ -196,3 +199,4 @@ const server = app.listen(PORT, () => {
 });
 
 module.exports = app;
+

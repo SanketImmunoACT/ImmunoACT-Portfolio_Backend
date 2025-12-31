@@ -58,7 +58,8 @@ const connectDB = async () => {
     
     // Sync database (create tables if they don't exist)
     if (process.env.NODE_ENV !== 'production') {
-      await sequelize.sync({ alter: true });
+      // Use force: false and alter: false to avoid modifying existing tables
+      await sequelize.sync({ force: false, alter: false });
       logger.info('Database synchronized');
     }
     
