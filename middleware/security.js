@@ -52,7 +52,7 @@ const strictLimiter = createRateLimiter(
 
 // Security headers middleware
 const securityHeaders = helmet({
-  contentSecurityPolicy: {
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
@@ -64,13 +64,14 @@ const securityHeaders = helmet({
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
     },
-  },
+  } : false, // Disable CSP in development
   crossOriginEmbedderPolicy: false,
-  hsts: {
+  crossOriginResourcePolicy: false, // Disable in development
+  hsts: process.env.NODE_ENV === 'production' ? {
     maxAge: 31536000,
     includeSubDomains: true,
     preload: true
-  }
+  } : false // Disable HSTS in development
 });
 
 // Input sanitization middleware
@@ -126,12 +127,23 @@ const auditMiddleware = (req, res, next) => {
 
 // HIPAA compliance middleware
 const hipaaCompliance = (req, res, next) => {
-  // Add HIPAA-specific headers
+  // Add HIPAA-specific headers (less restrictive in development)
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // Be less restrictive with frame options in development
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('X-Frame-Options', 'DENY');
+  } else {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  }
+  
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  
+  // Less restrictive permissions policy in development
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  }
   
   // Ensure HTTPS in production
   if (process.env.NODE_ENV === 'production' && !req.secure && req.get('X-Forwarded-Proto') !== 'https') {

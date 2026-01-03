@@ -14,8 +14,8 @@ const validateLocationSearch = [
   
   query('radius')
     .optional()
-    .isFloat({ min: 1, max: 500 })
-    .withMessage('Radius must be between 1 and 500 km'),
+    .isFloat({ min: 1, max: 1500 })
+    .withMessage('Radius must be between 1 and 1500 km'),
   
   query('limit')
     .optional()

@@ -25,10 +25,10 @@ class HospitalController {
       }
 
       const radiusKm = parseFloat(radius);
-      if (isNaN(radiusKm) || radiusKm <= 0 || radiusKm > 500) {
+      if (isNaN(radiusKm) || radiusKm <= 0 || radiusKm > 1500) {
         return res.status(400).json({
           success: false,
-          message: 'Radius must be a number between 1 and 500 km'
+          message: 'Radius must be a number between 1 and 1500 km'
         });
       }
 
@@ -102,6 +102,13 @@ class HospitalController {
       if (hospitalsWithDistance.length === 0) {
         response.message = `No hospitals found within ${radiusKm}km radius of ${location}. Please try expanding your search radius or searching for a different location.`;
       }
+
+      // Set cache control headers to prevent caching of search results
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
 
       res.json(response);
 
