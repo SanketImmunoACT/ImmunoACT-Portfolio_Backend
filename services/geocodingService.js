@@ -22,7 +22,8 @@ class GeocodingService {
         params: {
           address: address,
           key: this.googleApiKey,
-          region: 'in' // Bias results to India
+          region: 'in', // Bias results to India
+          components: 'country:IN' // Restrict results to India only
         }
       });
 

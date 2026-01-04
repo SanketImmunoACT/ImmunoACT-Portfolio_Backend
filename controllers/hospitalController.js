@@ -64,9 +64,19 @@ class HospitalController {
 
       // Add services filter if provided
       if (services.length > 0) {
-        whereConditions.services = {
-          [Op.overlap]: services
-        };
+        const serviceConditions = services.map(service => 
+          Hospital.sequelize.literal(`JSON_CONTAINS(services, '"${service}"')`)
+        );
+        
+        if (serviceConditions.length === 1) {
+          whereConditions[Op.and] = whereConditions[Op.and] || [];
+          whereConditions[Op.and].push(serviceConditions[0]);
+        } else {
+          whereConditions[Op.and] = whereConditions[Op.and] || [];
+          whereConditions[Op.and].push({
+            [Op.or]: serviceConditions
+          });
+        }
       }
 
       // Fetch hospitals from database
@@ -139,21 +149,32 @@ class HospitalController {
 
       if (city) {
         whereConditions.city = {
-          [Op.iLike]: `%${city}%`
+          [Op.like]: `%${city}%`
         };
       }
 
       if (state) {
         whereConditions.state = {
-          [Op.iLike]: `%${state}%`
+          [Op.like]: `%${state}%`
         };
       }
 
+      // Add services filter if provided
       if (services) {
         const serviceArray = Array.isArray(services) ? services : [services];
-        whereConditions.services = {
-          [Op.overlap]: serviceArray
-        };
+        const serviceConditions = serviceArray.map(service => 
+          Hospital.sequelize.literal(`JSON_CONTAINS(services, '"${service}"')`)
+        );
+        
+        if (serviceConditions.length === 1) {
+          whereConditions[Op.and] = whereConditions[Op.and] || [];
+          whereConditions[Op.and].push(serviceConditions[0]);
+        } else {
+          whereConditions[Op.and] = whereConditions[Op.and] || [];
+          whereConditions[Op.and].push({
+            [Op.or]: serviceConditions
+          });
+        }
       }
 
       const hospitals = await Hospital.findAndCountAll({
