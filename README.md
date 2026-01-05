@@ -321,9 +321,9 @@ CMD ["npm", "start"]
 
 ### Environment-Specific Configuration
 
-- **Development**: `.env.development`
-- **Staging**: `.env.staging`
-- **Production**: `.env.production`
+Configure environment variables based on your deployment environment:
+- Development: Use `.env` file
+- Production: Set environment variables directly or use your platform's configuration system
 
 ## 📊 Monitoring & Logging
 

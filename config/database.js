@@ -21,7 +21,7 @@ const sequelize = new Sequelize(
     
     // Security and performance settings
     dialectOptions: {
-      ssl: process.env.NODE_ENV === 'production' ? {
+      ssl: process.env.NODE_ENV === 'production' && process.env.DB_SSL_REQUIRED === 'true' ? {
         require: true,
         rejectUnauthorized: false
       } : false,

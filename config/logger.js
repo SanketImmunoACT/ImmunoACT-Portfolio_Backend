@@ -4,8 +4,16 @@ const path = require('path');
 // Create logs directory if it doesn't exist
 const fs = require('fs');
 const logDir = 'logs';
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+
+// Only create logs directory if we're not in a read-only environment
+let useFileLogging = true;
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir);
+  }
+} catch (error) {
+  console.warn('Warning: Cannot create logs directory, using console logging only');
+  useFileLogging = false;
 }
 
 // Custom format for healthcare compliance logging
@@ -35,50 +43,53 @@ const logger = winston.createLogger({
   format: healthcareFormat,
   defaultMeta: { service: 'immunoact-backend' },
   transports: [
-    // Error logs
-    new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 10,
+    // Always add console transport
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
     }),
     
-    // Audit logs for compliance
-    new winston.transports.File({
-      filename: path.join(logDir, 'audit.log'),
-      level: 'info',
-      maxsize: 5242880, // 5MB
-      maxFiles: 50, // Keep more audit logs
-    }),
-    
-    // Combined logs
-    new winston.transports.File({
-      filename: path.join(logDir, 'combined.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 10,
-    }),
-    
-    // Debug logs (only in development)
-    ...(process.env.NODE_ENV === 'development' ? [
+    // Add file transports only if file logging is available
+    ...(useFileLogging ? [
+      // Error logs
       new winston.transports.File({
-        filename: path.join(logDir, 'debug.log'),
-        level: 'debug',
+        filename: path.join(logDir, 'error.log'),
+        level: 'error',
         maxsize: 5242880, // 5MB
-        maxFiles: 5,
-      })
+        maxFiles: 10,
+      }),
+      
+      // Audit logs for compliance
+      new winston.transports.File({
+        filename: path.join(logDir, 'audit.log'),
+        level: 'info',
+        maxsize: 5242880, // 5MB
+        maxFiles: 50, // Keep more audit logs
+      }),
+      
+      // Combined logs
+      new winston.transports.File({
+        filename: path.join(logDir, 'combined.log'),
+        maxsize: 5242880, // 5MB
+        maxFiles: 10,
+      }),
+      
+      // Debug logs (only in development)
+      ...(process.env.NODE_ENV === 'development' ? [
+        new winston.transports.File({
+          filename: path.join(logDir, 'debug.log'),
+          level: 'debug',
+          maxsize: 5242880, // 5MB
+          maxFiles: 5,
+        })
+      ] : [])
     ] : [])
   ],
 });
 
-// Add console transport for development
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    )
-  }));
-}
+// Remove the separate console transport addition since it's now included above
 
 // Healthcare-specific audit logging function
 logger.auditLog = (action, userId, details, req) => {
