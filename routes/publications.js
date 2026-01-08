@@ -11,7 +11,7 @@ const {
 } = require('../controllers/publicationController');
 const {
   authenticateToken,
-  requirePermission
+  authorize
 } = require('../middleware/auth');
 
 const router = express.Router();
@@ -219,34 +219,34 @@ const queryValidation = [
 // Routes
 router.get('/', 
   authenticateToken, 
-  requirePermission('publications', 'read'), 
+  authorize('super_admin', 'office_executive'), 
   queryValidation, 
   getAllPublications
 );
 
 router.get('/stats', 
   authenticateToken, 
-  requirePermission('publications', 'read'), 
+  authorize('super_admin', 'office_executive'), 
   getPublicationStats
 );
 
 router.get('/:id', 
   authenticateToken, 
-  requirePermission('publications', 'read'), 
+  authorize('super_admin', 'office_executive'), 
   idValidation, 
   getPublicationById
 );
 
 router.post('/', 
   authenticateToken, 
-  requirePermission('publications', 'create'), 
+  authorize('super_admin', 'office_executive'), 
   createPublicationValidation, 
   createPublication
 );
 
 router.put('/:id', 
   authenticateToken, 
-  requirePermission('publications', 'update'), 
+  authorize('super_admin', 'office_executive'), 
   idValidation, 
   updatePublicationValidation, 
   updatePublication
@@ -254,14 +254,14 @@ router.put('/:id',
 
 router.delete('/:id', 
   authenticateToken, 
-  requirePermission('publications', 'delete'), 
+  authorize('super_admin'), 
   idValidation, 
   deletePublication
 );
 
 router.patch('/bulk-update', 
   authenticateToken, 
-  requirePermission('publications', 'update'), 
+  authorize('super_admin', 'office_executive'), 
   bulkUpdateValidation, 
   bulkUpdateStatus
 );

@@ -94,7 +94,7 @@ class ContactController {
     }
   }
 
-  // Get contact form submissions (admin only - would need authentication)
+  // Get contact form submissions (admin only)
   async getContactForms(req, res) {
     try {
       const {
@@ -103,7 +103,8 @@ class ContactController {
         status,
         partneringCategory,
         startDate,
-        endDate
+        endDate,
+        search
       } = req.query;
 
       // Build Sequelize where clause
@@ -138,34 +139,95 @@ class ContactController {
 
       const { count: total, rows: forms } = await ContactForm.findAndCountAll(options);
 
-      // Decrypt data for admin view (be careful with this)
+      // Decrypt data for admin view
       const decryptedForms = forms.map(form => form.getDecryptedData());
 
-      logger.auditLog('ADMIN_VIEWED_SUBMISSIONS', 'admin', {
-        query,
-        resultCount: forms.length,
-        page: options.page
+      // Filter by search term if provided (after decryption)
+      let filteredForms = decryptedForms;
+      if (search) {
+        const searchTerm = search.toLowerCase();
+        filteredForms = decryptedForms.filter(form => 
+          form.firstName?.toLowerCase().includes(searchTerm) ||
+          form.lastName?.toLowerCase().includes(searchTerm) ||
+          form.email?.toLowerCase().includes(searchTerm) ||
+          form.institution?.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      logger.auditLog('ADMIN_VIEWED_SUBMISSIONS', req.user.username, {
+        query: req.query,
+        resultCount: filteredForms.length,
+        page: parseInt(page)
       }, req);
 
       res.json({
         success: true,
-        data: decryptedForms,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
-          totalItems: total,
-          itemsPerPage: parseInt(limit)
+        data: {
+          contacts: filteredForms,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(total / parseInt(limit)),
+            totalItems: total,
+            itemsPerPage: parseInt(limit),
+            hasNext: (parseInt(page) * parseInt(limit)) < total,
+            hasPrev: parseInt(page) > 1
+          }
         }
       });
 
     } catch (error) {
       logger.error('Failed to retrieve contact forms:', {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        user: req.user?.username
       });
 
       res.status(500).json({
-        error: 'Failed to retrieve contact forms'
+        error: 'Failed to retrieve contact forms',
+        message: 'Internal server error'
+      });
+    }
+  }
+
+  // Get single contact form by ID (admin only)
+  async getContactFormById(req, res) {
+    try {
+      const { id } = req.params;
+
+      const form = await ContactForm.findByPk(id);
+
+      if (!form) {
+        return res.status(404).json({
+          error: 'Contact form not found',
+          message: 'The requested contact form does not exist'
+        });
+      }
+
+      // Decrypt data for admin view
+      const decryptedForm = form.getDecryptedData();
+
+      logger.auditLog('ADMIN_VIEWED_CONTACT_DETAIL', req.user.username, {
+        contactId: id,
+        status: form.status
+      }, req);
+
+      res.json({
+        success: true,
+        data: {
+          contact: decryptedForm
+        }
+      });
+
+    } catch (error) {
+      logger.error('Failed to retrieve contact form:', {
+        error: error.message,
+        contactId: req.params.id,
+        user: req.user?.username
+      });
+
+      res.status(500).json({
+        error: 'Failed to retrieve contact form',
+        message: 'Internal server error'
       });
     }
   }
@@ -179,19 +241,30 @@ class ContactController {
       const validStatuses = ['pending', 'reviewed', 'responded', 'archived'];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({
-          error: 'Invalid status. Must be one of: ' + validStatuses.join(', ')
+          error: 'Invalid status',
+          message: 'Status must be one of: ' + validStatuses.join(', ')
         });
       }
+
+      const form = await ContactForm.findByPk(id);
+      if (!form) {
+        return res.status(404).json({
+          error: 'Contact form not found',
+          message: 'The requested contact form does not exist'
+        });
+      }
+
+      const oldStatus = form.status;
 
       const [updatedRowsCount] = await ContactForm.update(
         { 
           status,
-          modifiedBy: 'admin', // In real app, get from JWT token
+          modifiedBy: req.user.username,
           lastModified: new Date()
         },
         { 
           where: { id },
-          userId: 'admin',
+          userId: req.user.username,
           ipAddress: req.ip,
           userAgent: req.get('User-Agent')
         }
@@ -199,15 +272,16 @@ class ContactController {
 
       if (updatedRowsCount === 0) {
         return res.status(404).json({
-          error: 'Contact form not found'
+          error: 'Contact form not found',
+          message: 'The requested contact form does not exist'
         });
       }
 
       const updatedForm = await ContactForm.findByPk(id);
 
-      logger.auditLog('CONTACT_FORM_STATUS_UPDATED', 'admin', {
+      logger.auditLog('CONTACT_FORM_STATUS_UPDATED', req.user.username, {
         submissionId: id,
-        oldStatus: updatedForm.status,
+        oldStatus,
         newStatus: status,
         notes
       }, req);
@@ -218,18 +292,69 @@ class ContactController {
         data: {
           id: updatedForm.id,
           status: updatedForm.status,
-          lastModified: updatedForm.lastModified
+          lastModified: updatedForm.lastModified,
+          modifiedBy: updatedForm.modifiedBy
         }
       });
 
     } catch (error) {
       logger.error('Failed to update contact form status:', {
         error: error.message,
-        submissionId: req.params.id
+        submissionId: req.params.id,
+        user: req.user?.username
       });
 
       res.status(500).json({
-        error: 'Failed to update contact form status'
+        error: 'Failed to update contact form status',
+        message: 'Internal server error'
+      });
+    }
+  }
+
+  // Delete contact form (super admin only)
+  async deleteContactForm(req, res) {
+    try {
+      const { id } = req.params;
+
+      const form = await ContactForm.findByPk(id);
+      if (!form) {
+        return res.status(404).json({
+          error: 'Contact form not found',
+          message: 'The requested contact form does not exist'
+        });
+      }
+
+      // Store form data for audit log before deletion
+      const formData = form.getDecryptedData();
+
+      await form.destroy({
+        userId: req.user.username,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      logger.auditLog('CONTACT_FORM_DELETED', req.user.username, {
+        submissionId: id,
+        partneringCategory: formData.partneringCategory,
+        submissionDate: formData.submissionDate,
+        reason: 'Manual deletion by admin'
+      }, req);
+
+      res.json({
+        success: true,
+        message: 'Contact form deleted successfully'
+      });
+
+    } catch (error) {
+      logger.error('Failed to delete contact form:', {
+        error: error.message,
+        submissionId: req.params.id,
+        user: req.user?.username
+      });
+
+      res.status(500).json({
+        error: 'Failed to delete contact form',
+        message: 'Internal server error'
       });
     }
   }
@@ -239,26 +364,7 @@ class ContactController {
     try {
       const { Op } = require('sequelize');
       
-      // Category breakdown
-      const categoryStats = await ContactForm.findAll({
-        attributes: [
-          'partneringCategory',
-          [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
-          [sequelize.fn('MAX', sequelize.col('submissionDate')), 'latestSubmission']
-        ],
-        group: ['partneringCategory'],
-        order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']]
-      });
-
-      // Status breakdown
-      const statusStats = await ContactForm.findAll({
-        attributes: [
-          'status',
-          [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-        ],
-        group: ['status']
-      });
-
+      // Total submissions
       const totalSubmissions = await ContactForm.count();
       
       // This month's submissions
@@ -271,9 +377,47 @@ class ContactController {
         }
       });
 
-      logger.auditLog('ADMIN_VIEWED_STATS', 'admin', {
+      // Last 30 days
+      const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const recentSubmissions = await ContactForm.count({
+        where: {
+          submissionDate: {
+            [Op.gte]: last30Days
+          }
+        }
+      });
+
+      // Category breakdown
+      const categoryStats = await ContactForm.findAll({
+        attributes: [
+          'partneringCategory',
+          [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+          [sequelize.fn('MAX', sequelize.col('submissionDate')), 'latestSubmission']
+        ],
+        group: ['partneringCategory'],
+        order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']],
+        raw: true
+      });
+
+      // Status breakdown
+      const statusStats = await ContactForm.findAll({
+        attributes: [
+          'status',
+          [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        ],
+        group: ['status'],
+        raw: true
+      });
+
+      // Pending submissions count
+      const pendingCount = await ContactForm.count({
+        where: { status: 'pending' }
+      });
+
+      logger.auditLog('ADMIN_VIEWED_CONTACT_STATS', req.user.username, {
         totalSubmissions,
-        thisMonth
+        thisMonth,
+        pendingCount
       }, req);
 
       res.json({
@@ -281,25 +425,29 @@ class ContactController {
         data: {
           totalSubmissions,
           thisMonth,
+          recentSubmissions,
+          pendingCount,
           categoryBreakdown: categoryStats.map(stat => ({
-            _id: stat.partneringCategory,
-            count: parseInt(stat.dataValues.count),
-            latestSubmission: stat.dataValues.latestSubmission
+            category: stat.partneringCategory,
+            count: parseInt(stat.count),
+            latestSubmission: stat.latestSubmission
           })),
           statusBreakdown: statusStats.map(stat => ({
-            _id: stat.status,
-            count: parseInt(stat.dataValues.count)
+            status: stat.status,
+            count: parseInt(stat.count)
           }))
         }
       });
 
     } catch (error) {
       logger.error('Failed to retrieve contact form statistics:', {
-        error: error.message
+        error: error.message,
+        user: req.user?.username
       });
 
       res.status(500).json({
-        error: 'Failed to retrieve statistics'
+        error: 'Failed to retrieve statistics',
+        message: 'Internal server error'
       });
     }
   }

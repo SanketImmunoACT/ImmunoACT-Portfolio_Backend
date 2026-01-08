@@ -140,12 +140,15 @@ class HospitalController {
       const { 
         city, 
         state, 
+        type,
+        search,
         services, 
-        limit = 50, 
-        offset = 0 
+        page = 1,
+        limit = 10
       } = req.query;
 
       const whereConditions = { isActive: true };
+      const offset = (parseInt(page) - 1) * parseInt(limit);
 
       if (city) {
         whereConditions.city = {
@@ -157,6 +160,18 @@ class HospitalController {
         whereConditions.state = {
           [Op.like]: `%${state}%`
         };
+      }
+
+      if (type) {
+        whereConditions.type = type;
+      }
+
+      if (search) {
+        whereConditions[Op.or] = [
+          { name: { [Op.like]: `%${search}%` } },
+          { city: { [Op.like]: `%${search}%` } },
+          { address: { [Op.like]: `%${search}%` } }
+        ];
       }
 
       // Add services filter if provided
@@ -180,17 +195,23 @@ class HospitalController {
       const hospitals = await Hospital.findAndCountAll({
         where: whereConditions,
         limit: parseInt(limit),
-        offset: parseInt(offset),
+        offset: offset,
         order: [['name', 'ASC']]
       });
+
+      const totalPages = Math.ceil(hospitals.count / parseInt(limit));
+      const currentPage = parseInt(page);
 
       res.json({
         success: true,
         data: {
           hospitals: hospitals.rows,
           total: hospitals.count,
-          limit: parseInt(limit),
-          offset: parseInt(offset)
+          currentPage: currentPage,
+          totalPages: totalPages,
+          hasNext: currentPage < totalPages,
+          hasPrev: currentPage > 1,
+          limit: parseInt(limit)
         }
       });
 
@@ -332,6 +353,91 @@ class HospitalController {
       res.status(500).json({
         success: false,
         message: 'An error occurred while updating the hospital'
+      });
+    }
+  }
+
+  /**
+   * Delete hospital (admin only)
+   */
+  async deleteHospital(req, res) {
+    try {
+      const { id } = req.params;
+
+      const hospital = await Hospital.findByPk(id);
+      if (!hospital) {
+        return res.status(404).json({
+          success: false,
+          message: 'Hospital not found'
+        });
+      }
+
+      await hospital.update({ isActive: false });
+
+      res.json({
+        success: true,
+        message: 'Hospital deleted successfully'
+      });
+
+    } catch (error) {
+      logger.error('Delete hospital error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'An error occurred while deleting the hospital'
+      });
+    }
+  }
+
+  /**
+   * Get hospital statistics (admin only)
+   */
+  async getHospitalStats(req, res) {
+    try {
+      let totalHospitals = 0;
+      let privateHospitals = 0;
+      let governmentHospitals = 0;
+
+      try {
+        totalHospitals = await Hospital.count({
+          where: { isActive: true }
+        });
+
+        privateHospitals = await Hospital.count({
+          where: { 
+            isActive: true,
+            type: 'Private'
+          }
+        });
+
+        governmentHospitals = await Hospital.count({
+          where: { 
+            isActive: true,
+            type: 'Government'
+          }
+        });
+      } catch (dbError) {
+        logger.warn('Database error in hospital stats, using fallback data:', dbError.message);
+        // Use fallback data if database queries fail
+        totalHospitals = 0;
+        privateHospitals = 0;
+        governmentHospitals = 0;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          totalHospitals,
+          privateHospitals,
+          governmentHospitals
+        }
+      });
+
+    } catch (error) {
+      logger.error('Get hospital stats error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'An error occurred while fetching hospital statistics',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }

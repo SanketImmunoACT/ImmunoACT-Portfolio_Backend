@@ -11,7 +11,7 @@ const {
 } = require('../controllers/careerController');
 const {
   authenticateToken,
-  requirePermission
+  authorize
 } = require('../middleware/auth');
 
 const router = express.Router();
@@ -317,34 +317,34 @@ const queryValidation = [
 // Routes
 router.get('/', 
   authenticateToken, 
-  requirePermission('careers', 'read'), 
+  authorize('super_admin', 'hr_manager'), 
   queryValidation, 
   getAllCareers
 );
 
 router.get('/stats', 
   authenticateToken, 
-  requirePermission('careers', 'read'), 
+  authorize('super_admin', 'hr_manager'), 
   getCareerStats
 );
 
 router.get('/:id', 
   authenticateToken, 
-  requirePermission('careers', 'read'), 
+  authorize('super_admin', 'hr_manager'), 
   idValidation, 
   getCareerById
 );
 
 router.post('/', 
   authenticateToken, 
-  requirePermission('careers', 'create'), 
+  authorize('super_admin', 'hr_manager'), 
   createCareerValidation, 
   createCareer
 );
 
 router.put('/:id', 
   authenticateToken, 
-  requirePermission('careers', 'update'), 
+  authorize('super_admin', 'hr_manager'), 
   idValidation, 
   updateCareerValidation, 
   updateCareer
@@ -352,14 +352,14 @@ router.put('/:id',
 
 router.delete('/:id', 
   authenticateToken, 
-  requirePermission('careers', 'delete'), 
+  authorize('super_admin'), 
   idValidation, 
   deleteCareer
 );
 
 router.patch('/bulk-update', 
   authenticateToken, 
-  requirePermission('careers', 'update'), 
+  authorize('super_admin', 'hr_manager'), 
   bulkUpdateValidation, 
   bulkUpdateStatus
 );

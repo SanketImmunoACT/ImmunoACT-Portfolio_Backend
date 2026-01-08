@@ -9,34 +9,59 @@ class EmailService {
 
   initializeTransporter() {
     if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      logger.warn('Email service not configured - missing SMTP settings');
+      logger.warn('Email service not configured - missing SMTP settings', {
+        SMTP_HOST: !!process.env.SMTP_HOST,
+        SMTP_USER: !!process.env.SMTP_USER,
+        SMTP_PASS: !!process.env.SMTP_PASS
+      });
       return;
     }
 
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
+    try {
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT) || 587,
+        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        },
+        // Add additional options for better compatibility
+        tls: {
+          ciphers: 'SSLv3',
+          rejectUnauthorized: false
+        }
+      });
 
-    // Verify connection
-    this.transporter.verify((error, success) => {
-      if (error) {
-        logger.error('Email service configuration error:', error);
-      } else {
-        logger.info('Email service ready');
-      }
-    });
+      // Verify connection
+      this.transporter.verify((error, success) => {
+        if (error) {
+          logger.error('Email service configuration error:', {
+            error: error.message,
+            code: error.code,
+            command: error.command
+          });
+        } else {
+          logger.info('Email service ready', {
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            user: process.env.SMTP_USER
+          });
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to initialize email transporter:', error);
+      this.transporter = null;
+    }
   }
 
   async sendEmail({ to, subject, html, text }) {
     if (!this.transporter) {
       logger.warn('Email service not configured - cannot send email');
-      return { success: false, error: 'Email service not configured' };
+      return { 
+        success: false, 
+        error: 'Email service not configured. Please check SMTP settings.' 
+      };
     }
 
     try {
@@ -48,19 +73,43 @@ class EmailService {
         text
       };
 
+      logger.info('Attempting to send email', {
+        to,
+        subject,
+        from: mailOptions.from
+      });
+
       const info = await this.transporter.sendMail(mailOptions);
       
       logger.info('Email sent successfully', {
         to,
         subject,
-        messageId: info.messageId
+        messageId: info.messageId,
+        response: info.response
       });
 
       return { success: true, messageId: info.messageId };
 
     } catch (error) {
-      logger.error('Failed to send email:', error);
-      return { success: false, error: error.message };
+      logger.error('Failed to send email:', {
+        error: error.message,
+        code: error.code,
+        command: error.command,
+        to,
+        subject
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = error.message;
+      if (error.code === 'EAUTH') {
+        errorMessage = 'Authentication failed. Please check SMTP username and password.';
+      } else if (error.code === 'ECONNECTION') {
+        errorMessage = 'Connection failed. Please check SMTP host and port settings.';
+      } else if (error.code === 'ETIMEDOUT') {
+        errorMessage = 'Connection timed out. Please check network connectivity.';
+      }
+      
+      return { success: false, error: errorMessage };
     }
   }
 

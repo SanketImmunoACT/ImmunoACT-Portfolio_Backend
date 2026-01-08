@@ -117,6 +117,13 @@ const validateHospitalId = [
 router.get('/search', validateLocationSearch, hospitalController.searchByLocation);
 
 /**
+ * @route   GET /api/hospitals/stats
+ * @desc    Get hospital statistics
+ * @access  Admin only
+ */
+router.get('/stats', hospitalController.getHospitalStats);
+
+/**
  * @route   GET /api/hospitals
  * @desc    Get all hospitals with optional filters
  * @access  Public
@@ -145,5 +152,12 @@ router.post('/', validateHospitalCreation, hospitalController.createHospital);
  * @access  Admin only
  */
 router.put('/:id', validateHospitalId, validateHospitalCreation, hospitalController.updateHospital);
+
+/**
+ * @route   DELETE /api/hospitals/:id
+ * @desc    Delete hospital (soft delete)
+ * @access  Admin only
+ */
+router.delete('/:id', validateHospitalId, hospitalController.deleteHospital);
 
 module.exports = router;

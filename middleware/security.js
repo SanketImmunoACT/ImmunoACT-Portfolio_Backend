@@ -34,19 +34,19 @@ const createRateLimiter = (windowMs, max, message) => {
 // Different rate limits for different endpoints
 const generalLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
-  100, // limit each IP to 100 requests per windowMs
+  process.env.NODE_ENV === 'development' ? 1000 : 100, // Higher limit in development
   'Too many requests from this IP, please try again later.'
 );
 
 const contactFormLimiter = createRateLimiter(
   60 * 60 * 1000, // 1 hour
-  5, // limit each IP to 5 contact form submissions per hour
+  process.env.NODE_ENV === 'development' ? 50 : 5, // Higher limit in development
   'Too many contact form submissions from this IP, please try again later.'
 );
 
 const strictLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
-  10, // limit each IP to 10 requests per windowMs
+  process.env.NODE_ENV === 'development' ? 100 : 10, // Higher limit in development
   'Too many requests to sensitive endpoint, please try again later.'
 );
 

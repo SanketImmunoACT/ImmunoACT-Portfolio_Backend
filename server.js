@@ -22,7 +22,6 @@ const mediaRoutes = require('./routes/media');
 const publicationRoutes = require('./routes/publications');
 const careerRoutes = require('./routes/careers');
 const publicRoutes = require('./routes/public');
-const uploadRoutes = require('./routes/upload');
 const searchRoutes = require('./routes/search');
 const hospitalRoutes = require('./routes/hospitals');
 
@@ -119,7 +118,10 @@ app.use(express.urlencoded({
 // Security and audit middleware
 app.use(auditMiddleware);
 app.use(sanitizeInput);
-app.use(generalLimiter);
+// Apply rate limiting only in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(generalLimiter);
+}
 
 // API routes
 app.use('/api/v1/contact', contactRoutes);
@@ -128,15 +130,11 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/media', mediaRoutes);
 app.use('/api/v1/publications', publicationRoutes);
 app.use('/api/v1/careers', careerRoutes);
-app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/search', searchRoutes);
 app.use('/api/v1/hospitals', hospitalRoutes);
 
 // Public routes (no authentication required)
 app.use('/api/v1/public', publicRoutes);
-
-// Serve uploaded files
-app.use('/uploads', express.static('uploads'));
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -153,7 +151,6 @@ app.get('/', (req, res) => {
       media: '/api/v1/media',
       publications: '/api/v1/publications',
       careers: '/api/v1/careers',
-      upload: '/api/v1/upload',
       search: '/api/v1/search',
       hospitals: '/api/v1/hospitals',
       public: '/api/v1/public'

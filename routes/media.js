@@ -11,7 +11,7 @@ const {
 } = require('../controllers/mediaController');
 const {
   authenticateToken,
-  requirePermission
+  authorize
 } = require('../middleware/auth');
 
 const router = express.Router();
@@ -163,34 +163,34 @@ const queryValidation = [
 // Routes
 router.get('/', 
   authenticateToken, 
-  requirePermission('media', 'read'), 
+  authorize('super_admin', 'office_executive'), 
   queryValidation, 
   getAllMedia
 );
 
 router.get('/stats', 
   authenticateToken, 
-  requirePermission('media', 'read'), 
+  authorize('super_admin', 'office_executive'), 
   getMediaStats
 );
 
 router.get('/:id', 
   authenticateToken, 
-  requirePermission('media', 'read'), 
+  authorize('super_admin', 'office_executive'), 
   idValidation, 
   getMediaById
 );
 
 router.post('/', 
   authenticateToken, 
-  requirePermission('media', 'create'), 
+  authorize('super_admin', 'office_executive'), 
   createMediaValidation, 
   createMedia
 );
 
 router.put('/:id', 
   authenticateToken, 
-  requirePermission('media', 'update'), 
+  authorize('super_admin', 'office_executive'), 
   idValidation, 
   updateMediaValidation, 
   updateMedia
@@ -198,14 +198,14 @@ router.put('/:id',
 
 router.delete('/:id', 
   authenticateToken, 
-  requirePermission('media', 'delete'), 
+  authorize('super_admin'), 
   idValidation, 
   deleteMedia
 );
 
 router.patch('/bulk-update', 
   authenticateToken, 
-  requirePermission('media', 'update'), 
+  authorize('super_admin', 'office_executive'), 
   bulkUpdateValidation, 
   bulkUpdateStatus
 );

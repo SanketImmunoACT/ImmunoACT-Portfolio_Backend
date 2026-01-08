@@ -11,6 +11,10 @@ const {
   contactFormLimiter, 
   strictLimiter 
 } = require('../middleware/security');
+const {
+  authenticateToken,
+  authorize
+} = require('../middleware/auth');
 
 // Public routes
 
@@ -27,30 +31,45 @@ router.post('/submit',
 // Health check
 router.get('/health', contactController.healthCheck);
 
-// Admin routes (would need authentication middleware in production)
-// Note: These should be protected with proper authentication
+// Admin routes - Protected with authentication and role-based access
 
 // Get all contact forms with filtering and pagination
 router.get('/admin/forms', 
   strictLimiter,
-  // authMiddleware, // Add authentication middleware
-  // adminMiddleware, // Add admin role middleware
+  authenticateToken,
+  authorize('super_admin', 'office_executive', 'hr_manager'),
   contactController.getContactForms
+);
+
+// Get single contact form by ID
+router.get('/admin/forms/:id',
+  strictLimiter,
+  authenticateToken,
+  authorize('super_admin', 'office_executive', 'hr_manager'),
+  contactController.getContactFormById
 );
 
 // Update contact form status
 router.patch('/admin/forms/:id/status',
   strictLimiter,
-  // authMiddleware,
-  // adminMiddleware,
+  authenticateToken,
+  authorize('super_admin', 'office_executive', 'hr_manager'),
   contactController.updateContactFormStatus
+);
+
+// Delete contact form (super admin only)
+router.delete('/admin/forms/:id',
+  strictLimiter,
+  authenticateToken,
+  authorize('super_admin'),
+  contactController.deleteContactForm
 );
 
 // Get contact form statistics
 router.get('/admin/stats',
   strictLimiter,
-  // authMiddleware,
-  // adminMiddleware,
+  authenticateToken,
+  authorize('super_admin', 'office_executive', 'hr_manager'),
   contactController.getContactFormStats
 );
 
