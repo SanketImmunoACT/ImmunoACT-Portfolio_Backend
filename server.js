@@ -14,6 +14,19 @@ const {
   hpp
 } = require('./middleware/security');
 
+// Import cookie middleware
+const {
+  cookieParserMiddleware,
+  sessionMiddleware,
+  hipaaSessionMiddleware,
+  cookieSecurityMiddleware,
+  cookieCleanupMiddleware,
+  cookieRateLimitMiddleware,
+  cookieDebugMiddleware
+} = require('./middleware/cookies');
+
+const cookieService = require('./services/cookieService');
+
 // Import routes
 const contactRoutes = require('./routes/contact');
 const authRoutes = require('./routes/auth');
@@ -24,6 +37,7 @@ const careerRoutes = require('./routes/careers');
 const publicRoutes = require('./routes/public');
 const searchRoutes = require('./routes/search');
 const hospitalRoutes = require('./routes/hospitals');
+const cookieRoutes = require('./routes/cookies');
 
 // Initialize Express app
 const app = express();
@@ -44,6 +58,16 @@ connectDB().catch(error => {
 app.use(securityHeaders);
 app.use(hipaaCompliance);
 app.use(hpp);
+
+// Cookie and session middleware
+app.use(cookieParserMiddleware);
+app.use(sessionMiddleware);
+app.use(cookieService.setCookieMiddleware());
+app.use(cookieService.parseCookieMiddleware());
+app.use(cookieSecurityMiddleware);
+app.use(cookieCleanupMiddleware);
+app.use(cookieRateLimitMiddleware);
+app.use(cookieDebugMiddleware);
 
 // CORS configuration - Allow specific origins
 const corsOptions = {
@@ -118,6 +142,7 @@ app.use(express.urlencoded({
 // Security and audit middleware
 app.use(auditMiddleware);
 app.use(sanitizeInput);
+app.use(hipaaSessionMiddleware); // HIPAA session validation
 // Apply rate limiting only in production
 if (process.env.NODE_ENV === 'production') {
   app.use(generalLimiter);
@@ -132,6 +157,7 @@ app.use('/api/v1/publications', publicationRoutes);
 app.use('/api/v1/careers', careerRoutes);
 app.use('/api/v1/search', searchRoutes);
 app.use('/api/v1/hospitals', hospitalRoutes);
+app.use('/api/v1/cookies', cookieRoutes);
 
 // Public routes (no authentication required)
 app.use('/api/v1/public', publicRoutes);
@@ -153,6 +179,7 @@ app.get('/', (req, res) => {
       careers: '/api/v1/careers',
       search: '/api/v1/search',
       hospitals: '/api/v1/hospitals',
+      cookies: '/api/v1/cookies',
       public: '/api/v1/public'
     }
   });
