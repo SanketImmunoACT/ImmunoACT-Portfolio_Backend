@@ -6,6 +6,7 @@ const Media = require('./Media');
 const Publication = require('./Publication');
 const Career = require('./Career');
 const Hospital = require('./Hospital');
+const JobReferral = require('./JobReferral');
 
 // Define associations
 User.hasMany(ContactForm, {
@@ -81,6 +82,17 @@ Career.belongsTo(User, {
   as: 'modifier'
 });
 
+// JobReferral associations
+JobReferral.belongsTo(Career, {
+  foreignKey: 'convertedToJobId',
+  as: 'convertedJob'
+});
+
+Career.hasMany(JobReferral, {
+  foreignKey: 'convertedToJobId',
+  as: 'referrals'
+});
+
 // Export all models
 module.exports = {
   sequelize,
@@ -92,5 +104,6 @@ module.exports = {
   Media,
   Publication,
   Career,
-  Hospital
+  Hospital,
+  JobReferral
 };

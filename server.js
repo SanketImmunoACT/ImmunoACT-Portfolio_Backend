@@ -39,6 +39,8 @@ const searchRoutes = require('./routes/search');
 const hospitalRoutes = require('./routes/hospitals');
 const cookieRoutes = require('./routes/cookies');
 const adminRoutes = require('./routes/admin');
+const jobReferralRoutes = require('./routes/jobReferrals');
+const setupRoutes = require('./routes/setup');
 
 // Initialize Express app
 const app = express();
@@ -201,6 +203,8 @@ app.use('/api/v1/search', searchRoutes);
 app.use('/api/v1/hospitals', hospitalRoutes);
 app.use('/api/v1/cookies', cookieRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/job-referrals', jobReferralRoutes);
+app.use('/api/v1/setup', setupRoutes);
 
 // Public routes (no authentication required)
 app.use('/api/v1/public', publicRoutes);
