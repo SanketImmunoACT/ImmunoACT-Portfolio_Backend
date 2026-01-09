@@ -55,20 +55,6 @@ const createPublicationValidation = [
     .isLength({ max: 5000 })
     .withMessage('Abstract must not exceed 5000 characters')
     .trim(),
-  body('doi')
-    .optional()
-    .isLength({ min: 1, max: 200 })
-    .withMessage('DOI must be between 1 and 200 characters')
-    .trim(),
-  body('pmid')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('PMID must be between 1 and 50 characters')
-    .trim(),
-  body('imageUrl')
-    .optional({ checkFalsy: true })
-    .isURL()
-    .withMessage('Image URL must be a valid URL'),
   body('tags')
     .optional()
     .isArray()
@@ -77,21 +63,7 @@ const createPublicationValidation = [
     .optional()
     .isString()
     .isLength({ min: 1, max: 50 })
-    .withMessage('Each tag must be between 1 and 50 characters'),
-  body('metaTitle')
-    .optional()
-    .isLength({ max: 200 })
-    .withMessage('Meta title must not exceed 200 characters')
-    .trim(),
-  body('metaDescription')
-    .optional()
-    .isLength({ max: 500 })
-    .withMessage('Meta description must not exceed 500 characters')
-    .trim(),
-  body('impactFactor')
-    .optional()
-    .isFloat({ min: 0, max: 999.999 })
-    .withMessage('Impact factor must be a number between 0 and 999.999')
+    .withMessage('Each tag must be between 1 and 50 characters')
 ];
 
 const updatePublicationValidation = [
@@ -137,20 +109,6 @@ const updatePublicationValidation = [
     .isLength({ max: 5000 })
     .withMessage('Abstract must not exceed 5000 characters')
     .trim(),
-  body('doi')
-    .optional()
-    .isLength({ min: 1, max: 200 })
-    .withMessage('DOI must be between 1 and 200 characters')
-    .trim(),
-  body('pmid')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('PMID must be between 1 and 50 characters')
-    .trim(),
-  body('imageUrl')
-    .optional({ checkFalsy: true })
-    .isURL()
-    .withMessage('Image URL must be a valid URL'),
   body('tags')
     .optional()
     .isArray()
@@ -159,21 +117,7 @@ const updatePublicationValidation = [
     .optional()
     .isString()
     .isLength({ min: 1, max: 50 })
-    .withMessage('Each tag must be between 1 and 50 characters'),
-  body('metaTitle')
-    .optional()
-    .isLength({ max: 200 })
-    .withMessage('Meta title must not exceed 200 characters')
-    .trim(),
-  body('metaDescription')
-    .optional()
-    .isLength({ max: 500 })
-    .withMessage('Meta description must not exceed 500 characters')
-    .trim(),
-  body('impactFactor')
-    .optional()
-    .isFloat({ min: 0, max: 999.999 })
-    .withMessage('Impact factor must be a number between 0 and 999.999')
+    .withMessage('Each tag must be between 1 and 50 characters')
 ];
 
 const bulkUpdateValidation = [

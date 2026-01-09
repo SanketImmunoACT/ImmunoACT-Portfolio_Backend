@@ -221,13 +221,7 @@ const createPublication = async (req, res) => {
       buttonText = 'View Publication',
       status = 'draft',
       abstract,
-      doi,
-      pmid,
-      tags,
-      imageUrl,
-      metaTitle,
-      metaDescription,
-      impactFactor
+      tags
     } = req.body;
 
     const publication = await Publication.create({
@@ -240,13 +234,7 @@ const createPublication = async (req, res) => {
       buttonText,
       status,
       abstract,
-      doi,
-      pmid,
       tags: Array.isArray(tags) ? tags : [],
-      imageUrl,
-      metaTitle,
-      metaDescription,
-      impactFactor,
       createdBy: req.user.id,
       publishedBy: status === 'published' ? req.user.id : null,
       publishedAt: status === 'published' ? new Date() : null
@@ -295,13 +283,7 @@ const updatePublication = async (req, res) => {
       buttonText,
       status,
       abstract,
-      doi,
-      pmid,
-      tags,
-      imageUrl,
-      metaTitle,
-      metaDescription,
-      impactFactor
+      tags
     } = req.body;
 
     const publication = await Publication.findByPk(id);
@@ -336,13 +318,7 @@ const updatePublication = async (req, res) => {
       }
     }
     if (abstract !== undefined) updateData.abstract = abstract;
-    if (doi !== undefined) updateData.doi = doi;
-    if (pmid !== undefined) updateData.pmid = pmid;
     if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags : [];
-    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
-    if (metaTitle !== undefined) updateData.metaTitle = metaTitle;
-    if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
-    if (impactFactor !== undefined) updateData.impactFactor = impactFactor;
 
     await publication.update(updateData);
 

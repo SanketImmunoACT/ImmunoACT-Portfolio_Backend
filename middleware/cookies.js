@@ -162,6 +162,11 @@ const cookieCleanupMiddleware = (req, res, next) => {
  * Rate limiting for cookie operations
  */
 const cookieRateLimitMiddleware = (req, res, next) => {
+  // Skip rate limiting in development to prevent issues during debugging
+  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    return next();
+  }
+  
   const clientId = req.ip + (req.get('User-Agent') || '');
   const key = `cookie_ops_${Buffer.from(clientId).toString('base64')}`;
   
@@ -172,7 +177,7 @@ const cookieRateLimitMiddleware = (req, res, next) => {
   
   const now = Date.now();
   const windowMs = 15 * 60 * 1000; // 15 minutes
-  const maxOps = 100; // Max 100 cookie operations per window
+  const maxOps = 500; // Increased from 100 to 500 operations per window
   
   const clientData = global.cookieRateLimit.get(key) || { count: 0, resetTime: now + windowMs };
   

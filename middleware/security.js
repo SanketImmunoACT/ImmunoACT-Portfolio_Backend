@@ -46,7 +46,7 @@ const contactFormLimiter = createRateLimiter(
 
 const strictLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
-  process.env.NODE_ENV === 'development' ? 100 : 10, // Higher limit in development
+  process.env.NODE_ENV === 'development' ? 10000 : 10, // Much higher limit in development
   'Too many requests to sensitive endpoint, please try again later.'
 );
 

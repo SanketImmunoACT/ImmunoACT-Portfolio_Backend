@@ -48,38 +48,16 @@ console.log('🚀 Starting ImmunoACT Backend Server...');
 // Trust proxy (important for rate limiting and IP detection)
 app.set('trust proxy', 1);
 
-// Connect to database
-console.log('📊 Connecting to database...');
-connectDB().catch(error => {
-  console.error('❌ Database connection failed:', error);
-  process.exit(1);
-});
-
-// Security middleware (order matters!)
-app.use(securityHeaders);
-app.use(hipaaCompliance);
-app.use(hpp);
-
-// Cookie and session middleware
-app.use(cookieParserMiddleware);
-app.use(sessionMiddleware);
-app.use(cookieService.setCookieMiddleware());
-app.use(cookieService.parseCookieMiddleware());
-app.use(cookieSecurityMiddleware);
-app.use(cookieCleanupMiddleware);
-app.use(cookieRateLimitMiddleware);
-app.use(cookieDebugMiddleware);
-
-// CORS configuration - Allow specific origins
+// CORS configuration - Apply FIRST before any other middleware
 const corsOptions = {
   origin: function (origin, callback) {
     console.log('CORS Origin:', origin); // Debug log
     
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
     // In development, be more permissive
     if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      
       // Allow localhost on any port for development
       if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
         console.log('CORS: Allowing localhost origin:', origin);
@@ -98,7 +76,7 @@ const corsOptions = {
       callback(null, true);
     } else {
       console.log(`CORS blocked origin: ${origin}`);
-      // In development, allow it anyway
+      // In development, allow it anyway to prevent blocking
       if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
         console.log('CORS: Allowing in development mode');
         callback(null, true);
@@ -126,31 +104,38 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 
+// Apply CORS FIRST - before any other middleware
 app.use(cors(corsOptions));
 
 // Handle preflight requests explicitly
 app.options('*', cors(corsOptions));
 
-// Add explicit CORS headers as fallback
+// Add CORS debugging middleware
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`${req.method} ${req.path} - Origin: ${req.get('Origin') || 'none'}`);
+  }
+  next();
+});
+
+// Add explicit CORS headers as additional fallback
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  console.log('Request from origin:', origin);
   
-  // Allow specific origins
+  // Allow specific origins in development
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:5173', 
     'http://localhost:5174'
   ];
   
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Cache-Control, Pragma, Expires, Origin, X-HTTP-Method-Override');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
   }
-  
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Cache-Control, Pragma, Expires, Origin, X-HTTP-Method-Override');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -161,13 +146,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add CORS debugging middleware
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`${req.method} ${req.path} - Origin: ${req.get('Origin') || 'none'}`);
-  }
-  next();
+// Connect to database
+console.log('📊 Connecting to database...');
+connectDB().catch(error => {
+  console.error('❌ Database connection failed:', error);
+  process.exit(1);
 });
+
+// Security middleware (order matters!)
+app.use(securityHeaders);
+app.use(hipaaCompliance);
+app.use(hpp);
+
+// Cookie and session middleware
+app.use(cookieParserMiddleware);
+app.use(sessionMiddleware);
+app.use(cookieService.setCookieMiddleware());
+app.use(cookieService.parseCookieMiddleware());
+app.use(cookieSecurityMiddleware);
+app.use(cookieCleanupMiddleware);
+app.use(cookieRateLimitMiddleware);
+app.use(cookieDebugMiddleware);
 
 // Compression middleware
 app.use(compression());
@@ -228,6 +227,21 @@ app.get('/', (req, res) => {
     }
   });
 });
+
+// Development endpoint to clear rate limits
+if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+  app.get('/dev/clear-rate-limits', (req, res) => {
+    // Clear cookie rate limits
+    if (global.cookieRateLimit) {
+      global.cookieRateLimit.clear();
+    }
+    
+    res.json({
+      message: 'Rate limits cleared',
+      timestamp: new Date().toISOString()
+    });
+  });
+}
 
 // 404 handler
 app.use('*', (req, res) => {
