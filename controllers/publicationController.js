@@ -4,6 +4,71 @@ const logger = require('../config/logger');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
+// Get public publications (only published ones, no authentication required)
+const getPublicPublications = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 100, 
+      category, 
+      journal,
+      search,
+      sortBy = 'publishedDate',
+      sortOrder = 'DESC'
+    } = req.query;
+    
+    const offset = (page - 1) * limit;
+
+    // Build where clause - only show published publications for public
+    const whereClause = {
+      status: 'published'
+    };
+    
+    if (category) {
+      whereClause.category = { [Op.like]: `%${category}%` };
+    }
+    
+    if (journal) {
+      whereClause.journal = { [Op.like]: `%${journal}%` };
+    }
+    
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { authors: { [Op.like]: `%${search}%` } },
+        { journal: { [Op.like]: `%${search}%` } },
+        { abstract: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows: publications } = await Publication.findAndCountAll({
+      where: whereClause,
+      // Don't include user information for public API
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [[sortBy, sortOrder.toUpperCase()]]
+    });
+
+    res.json({
+      publications: publications.map(item => item.toPublicObject()),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(count / limit),
+        totalItems: count,
+        hasNext: offset + publications.length < count,
+        hasPrev: page > 1
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get public publications error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch publications',
+      message: 'Internal server error'
+    });
+  }
+};
+
 // Get all publications with filtering and pagination
 const getAllPublications = async (req, res) => {
   try {
@@ -449,5 +514,6 @@ module.exports = {
   updatePublication,
   deletePublication,
   bulkUpdateStatus,
-  getPublicationStats
+  getPublicationStats,
+  getPublicPublications
 };

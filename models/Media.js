@@ -20,6 +20,25 @@ class Media extends Model {
       lastModifiedBy: this.lastModifiedBy
     };
   }
+
+  // Instance method to get public object for public API responses (no sensitive data)
+  toPublicObject() {
+    return {
+      id: this.id,
+      title: this.title,
+      link: this.link,
+      publishedDate: this.publishedDate,
+      sourceName: this.sourceName,
+      excerpt: this.excerpt,
+      imageUrl: this.imageUrl,
+      tags: this.tags,
+      publishedAt: this.publishedAt,
+      // Format for frontend compatibility
+      source: this.sourceName,
+      date: this.publishedDate,
+      category: this.sourceName // For backward compatibility
+    };
+  }
 }
 
 Media.init({

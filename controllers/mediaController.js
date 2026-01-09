@@ -4,6 +4,65 @@ const logger = require('../config/logger');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
+// Get public media articles (only published ones, no authentication required)
+const getPublicMedia = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 100, 
+      sourceName, 
+      search,
+      sortBy = 'publishedDate',
+      sortOrder = 'DESC'
+    } = req.query;
+    
+    const offset = (page - 1) * limit;
+
+    // Build where clause - only show published media for public
+    const whereClause = {
+      status: 'published'
+    };
+    
+    if (sourceName) {
+      whereClause.sourceName = { [Op.like]: `%${sourceName}%` };
+    }
+    
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { excerpt: { [Op.like]: `%${search}%` } },
+        { sourceName: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows: media } = await Media.findAndCountAll({
+      where: whereClause,
+      // Don't include user information for public API
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [[sortBy, sortOrder.toUpperCase()]]
+    });
+
+    res.json({
+      media: media.map(item => item.toPublicObject()),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(count / limit),
+        totalItems: count,
+        hasNext: offset + media.length < count,
+        hasPrev: page > 1
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get public media error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch media articles',
+      message: 'Internal server error'
+    });
+  }
+};
+
 // Get all media articles with filtering and pagination
 const getAllMedia = async (req, res) => {
   try {
@@ -409,5 +468,6 @@ module.exports = {
   updateMedia,
   deleteMedia,
   bulkUpdateStatus,
-  getMediaStats
+  getMediaStats,
+  getPublicMedia
 };

@@ -4,7 +4,85 @@ const logger = require('../config/logger');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
-// Get all careers with filtering and pagination
+// Get public careers (only active ones, no authentication required)
+const getPublicCareers = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 100, 
+      department, 
+      location,
+      employmentType,
+      experienceLevel,
+      isRemote,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = req.query;
+    
+    const offset = (page - 1) * limit;
+
+    // Build where clause - only show active careers for public
+    const whereClause = {
+      status: 'active'
+    };
+    
+    if (department) {
+      whereClause.department = { [Op.like]: `%${department}%` };
+    }
+    
+    if (location) {
+      whereClause.location = { [Op.like]: `%${location}%` };
+    }
+    
+    if (employmentType) {
+      whereClause.employmentType = employmentType;
+    }
+    
+    if (experienceLevel) {
+      whereClause.experienceLevel = experienceLevel;
+    }
+    
+    if (isRemote !== undefined) {
+      whereClause.isRemote = isRemote === 'true';
+    }
+    
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+        { department: { [Op.like]: `%${search}%` } },
+        { location: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows: careers } = await Career.findAndCountAll({
+      where: whereClause,
+      // Don't include user information for public API
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [[sortBy, sortOrder.toUpperCase()]]
+    });
+
+    res.json({
+      careers: careers.map(item => item.toPublicObject()),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(count / limit),
+        totalItems: count,
+        hasNext: offset + careers.length < count,
+        hasPrev: page > 1
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get public careers error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch careers',
+      message: 'Internal server error'
+    });
+  }
+};
 const getAllCareers = async (req, res) => {
   try {
     const { 
@@ -507,5 +585,6 @@ module.exports = {
   updateCareer,
   deleteCareer,
   bulkUpdateStatus,
-  getCareerStats
+  getCareerStats,
+  getPublicCareers
 };

@@ -38,6 +38,7 @@ const publicRoutes = require('./routes/public');
 const searchRoutes = require('./routes/search');
 const hospitalRoutes = require('./routes/hospitals');
 const cookieRoutes = require('./routes/cookies');
+const adminRoutes = require('./routes/admin');
 
 // Initialize Express app
 const app = express();
@@ -72,13 +73,16 @@ app.use(cookieDebugMiddleware);
 // CORS configuration - Allow specific origins
 const corsOptions = {
   origin: function (origin, callback) {
+    console.log('CORS Origin:', origin); // Debug log
+    
     // In development, be more permissive
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
       // Allow localhost on any port for development
       if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        console.log('CORS: Allowing localhost origin:', origin);
         return callback(null, true);
       }
     }
@@ -87,11 +91,20 @@ const corsOptions = {
       ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
       : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'];
     
+    console.log('CORS: Checking against allowed origins:', allowedOrigins);
+    
     if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('CORS: Origin allowed:', origin);
       callback(null, true);
     } else {
       console.log(`CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      // In development, allow it anyway
+      if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+        console.log('CORS: Allowing in development mode');
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
     }
   },
   credentials: true,
@@ -117,6 +130,36 @@ app.use(cors(corsOptions));
 
 // Handle preflight requests explicitly
 app.options('*', cors(corsOptions));
+
+// Add explicit CORS headers as fallback
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log('Request from origin:', origin);
+  
+  // Allow specific origins
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173', 
+    'http://localhost:5174'
+  ];
+  
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Cache-Control, Pragma, Expires, Origin, X-HTTP-Method-Override');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
 
 // Add CORS debugging middleware
 app.use((req, res, next) => {
@@ -158,6 +201,7 @@ app.use('/api/v1/careers', careerRoutes);
 app.use('/api/v1/search', searchRoutes);
 app.use('/api/v1/hospitals', hospitalRoutes);
 app.use('/api/v1/cookies', cookieRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // Public routes (no authentication required)
 app.use('/api/v1/public', publicRoutes);

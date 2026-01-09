@@ -7,7 +7,8 @@ const {
   updateMedia,
   deleteMedia,
   bulkUpdateStatus,
-  getMediaStats
+  getMediaStats,
+  getPublicMedia
 } = require('../controllers/mediaController');
 const {
   authenticateToken,
@@ -42,7 +43,7 @@ const createMediaValidation = [
     .withMessage('Excerpt must not exceed 1000 characters')
     .trim(),
   body('imageUrl')
-    .optional()
+    .optional({ checkFalsy: true })
     .isURL()
     .withMessage('Image URL must be a valid URL'),
   body('tags')
@@ -95,7 +96,7 @@ const updateMediaValidation = [
     .withMessage('Excerpt must not exceed 1000 characters')
     .trim(),
   body('imageUrl')
-    .optional()
+    .optional({ checkFalsy: true })
     .isURL()
     .withMessage('Image URL must be a valid URL'),
   body('tags')
@@ -161,6 +162,13 @@ const queryValidation = [
 ];
 
 // Routes
+
+// Public route for published media (no authentication required)
+router.get('/public', 
+  queryValidation, 
+  getPublicMedia
+);
+
 router.get('/', 
   authenticateToken, 
   authorize('super_admin', 'office_executive'), 

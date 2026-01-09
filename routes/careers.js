@@ -7,7 +7,8 @@ const {
   updateCareer,
   deleteCareer,
   bulkUpdateStatus,
-  getCareerStats
+  getCareerStats,
+  getPublicCareers
 } = require('../controllers/careerController');
 const {
   authenticateToken,
@@ -315,6 +316,13 @@ const queryValidation = [
 ];
 
 // Routes
+
+// Public route for active careers (no authentication required)
+router.get('/public', 
+  queryValidation, 
+  getPublicCareers
+);
+
 router.get('/', 
   authenticateToken, 
   authorize('super_admin', 'hr_manager'), 

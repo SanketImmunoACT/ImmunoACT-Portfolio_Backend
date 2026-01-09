@@ -25,6 +25,30 @@ class Publication extends Model {
       lastModifiedBy: this.lastModifiedBy
     };
   }
+
+  // Instance method to get public object for public API responses (no sensitive data)
+  toPublicObject() {
+    return {
+      id: this.id,
+      title: this.title,
+      authors: this.authors,
+      journal: this.journal,
+      url: this.url,
+      publishedDate: this.publishedDate,
+      category: this.category,
+      buttonText: this.buttonText,
+      abstract: this.abstract,
+      doi: this.doi,
+      pmid: this.pmid,
+      tags: this.tags,
+      imageUrl: this.imageUrl,
+      publishedAt: this.publishedAt,
+      // Format for frontend compatibility
+      date: this.publishedDate,
+      type: this.buttonText || 'Publication',
+      isActive: true // All public publications are active
+    };
+  }
 }
 
 Publication.init({

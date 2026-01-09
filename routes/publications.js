@@ -7,7 +7,8 @@ const {
   updatePublication,
   deletePublication,
   bulkUpdateStatus,
-  getPublicationStats
+  getPublicationStats,
+  getPublicPublications
 } = require('../controllers/publicationController');
 const {
   authenticateToken,
@@ -65,7 +66,7 @@ const createPublicationValidation = [
     .withMessage('PMID must be between 1 and 50 characters')
     .trim(),
   body('imageUrl')
-    .optional()
+    .optional({ checkFalsy: true })
     .isURL()
     .withMessage('Image URL must be a valid URL'),
   body('tags')
@@ -147,7 +148,7 @@ const updatePublicationValidation = [
     .withMessage('PMID must be between 1 and 50 characters')
     .trim(),
   body('imageUrl')
-    .optional()
+    .optional({ checkFalsy: true })
     .isURL()
     .withMessage('Image URL must be a valid URL'),
   body('tags')
@@ -217,6 +218,13 @@ const queryValidation = [
 ];
 
 // Routes
+
+// Public route for published publications (no authentication required)
+router.get('/public', 
+  queryValidation, 
+  getPublicPublications
+);
+
 router.get('/', 
   authenticateToken, 
   authorize('super_admin', 'office_executive'), 

@@ -31,6 +31,36 @@ class Career extends Model {
       lastModifiedBy: this.lastModifiedBy
     };
   }
+
+  // Instance method to get public object for public API responses (no sensitive data)
+  toPublicObject() {
+    return {
+      id: this.id,
+      title: this.title,
+      department: this.department,
+      location: this.location,
+      employmentType: this.employmentType,
+      experienceLevel: this.experienceLevel,
+      salaryRange: this.salaryRange,
+      description: this.description,
+      responsibilities: this.responsibilities,
+      requirements: this.requirements,
+      qualifications: this.qualifications,
+      benefits: this.benefits,
+      applicationDeadline: this.applicationDeadline,
+      isRemote: this.isRemote,
+      tags: this.tags,
+      applicationEmail: this.applicationEmail,
+      applicationUrl: this.applicationUrl,
+      urgency: this.urgency,
+      workSchedule: this.workSchedule,
+      travelRequired: this.travelRequired,
+      publishedAt: this.publishedAt,
+      // Convert arrays to proper format for frontend
+      keyResponsibilities: this.responsibilities,
+      desiredQualities: this.benefits
+    };
+  }
 }
 
 Career.init({
