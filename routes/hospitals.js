@@ -3,6 +3,7 @@ const router = express.Router();
 const hospitalController = require('../controllers/hospitalController');
 const { body, query, param } = require('express-validator');
 const { handleValidationErrors } = require('../middleware/validation');
+const { authenticateToken, authorize } = require('../middleware/auth');
 
 // Validation middleware
 const validateLocationSearch = [
@@ -72,17 +73,17 @@ const validateHospitalCreation = [
     .withMessage('Longitude must be between -180 and 180'),
   
   body('phone')
-    .optional()
+    .optional({ checkFalsy: true })
     .matches(/^[\+]?[0-9\s\-\(\)]+$/)
     .withMessage('Invalid phone number format'),
   
   body('email')
-    .optional()
+    .optional({ checkFalsy: true })
     .isEmail()
     .withMessage('Invalid email format'),
   
   body('website')
-    .optional()
+    .optional({ checkFalsy: true })
     .isURL()
     .withMessage('Invalid website URL'),
   
@@ -121,7 +122,11 @@ router.get('/search', validateLocationSearch, hospitalController.searchByLocatio
  * @desc    Get hospital statistics
  * @access  Admin only
  */
-router.get('/stats', hospitalController.getHospitalStats);
+router.get('/stats', 
+  authenticateToken, 
+  authorize('super_admin', 'office_executive', 'hr_manager'), 
+  hospitalController.getHospitalStats
+);
 
 /**
  * @route   GET /api/hospitals
@@ -138,26 +143,42 @@ router.get('/', hospitalController.getAllHospitals);
  */
 router.get('/:id', validateHospitalId, hospitalController.getHospitalById);
 
-// Admin routes (require authentication - add auth middleware as needed)
+// Admin routes (require authentication)
 /**
  * @route   POST /api/hospitals
  * @desc    Create new hospital
  * @access  Admin only
  */
-router.post('/', validateHospitalCreation, hospitalController.createHospital);
+router.post('/', 
+  authenticateToken, 
+  authorize('super_admin', 'office_executive'), 
+  validateHospitalCreation, 
+  hospitalController.createHospital
+);
 
 /**
  * @route   PUT /api/hospitals/:id
  * @desc    Update hospital
  * @access  Admin only
  */
-router.put('/:id', validateHospitalId, validateHospitalCreation, hospitalController.updateHospital);
+router.put('/:id', 
+  authenticateToken, 
+  authorize('super_admin', 'office_executive'), 
+  validateHospitalId, 
+  validateHospitalCreation, 
+  hospitalController.updateHospital
+);
 
 /**
  * @route   DELETE /api/hospitals/:id
  * @desc    Delete hospital (soft delete)
  * @access  Admin only
  */
-router.delete('/:id', validateHospitalId, hospitalController.deleteHospital);
+router.delete('/:id', 
+  authenticateToken, 
+  authorize('super_admin'), 
+  validateHospitalId, 
+  hospitalController.deleteHospital
+);
 
 module.exports = router;

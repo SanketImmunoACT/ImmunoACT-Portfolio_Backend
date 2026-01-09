@@ -267,4 +267,77 @@ router.get('/real-time-stats',
   }
 );
 
+// Cleanup empty fields (Super Admin only)
+router.post('/cleanup-empty-fields',
+  strictLimiter,
+  authenticateToken,
+  authorize('super_admin'),
+  async (req, res) => {
+    try {
+      const { sequelize } = require('../config/database');
+      const logger = require('../config/logger');
+      
+      // Update hospitals table - convert empty strings to NULL
+      const hospitalUpdates = await sequelize.query(`
+        UPDATE hospitals 
+        SET 
+          phone = CASE WHEN phone = '' THEN NULL ELSE phone END,
+          email = CASE WHEN email = '' THEN NULL ELSE email END,
+          website = CASE WHEN website = '' THEN NULL ELSE website END,
+          zipCode = CASE WHEN zipCode = '' THEN NULL ELSE zipCode END,
+          description = CASE WHEN description = '' THEN NULL ELSE description END
+        WHERE 
+          phone = '' OR 
+          email = '' OR 
+          website = '' OR 
+          zipCode = '' OR 
+          description = ''
+      `);
+
+      // Update publications table - convert empty strings to NULL
+      const publicationUpdates = await sequelize.query(`
+        UPDATE publications 
+        SET 
+          doi = CASE WHEN doi = '' THEN NULL ELSE doi END,
+          pmid = CASE WHEN pmid = '' THEN NULL ELSE pmid END,
+          imageUrl = CASE WHEN imageUrl = '' THEN NULL ELSE imageUrl END,
+          metaTitle = CASE WHEN metaTitle = '' THEN NULL ELSE metaTitle END,
+          metaDescription = CASE WHEN metaDescription = '' THEN NULL ELSE metaDescription END,
+          abstract = CASE WHEN abstract = '' THEN NULL ELSE abstract END
+        WHERE 
+          doi = '' OR 
+          pmid = '' OR 
+          imageUrl = '' OR 
+          metaTitle = '' OR 
+          metaDescription = '' OR 
+          abstract = ''
+      `);
+
+      logger.auditLog('DATA_CLEANUP_PERFORMED', req.user.username, {
+        hospitalsUpdated: hospitalUpdates[1],
+        publicationsUpdated: publicationUpdates[1],
+        ip: req.ip
+      }, req);
+
+      res.json({
+        success: true,
+        message: 'Empty fields cleanup completed successfully',
+        data: {
+          hospitalsUpdated: hospitalUpdates[1],
+          publicationsUpdated: publicationUpdates[1]
+        }
+      });
+
+    } catch (error) {
+      const logger = require('../config/logger');
+      logger.error('Cleanup empty fields error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to cleanup empty fields',
+        message: 'Internal server error'
+      });
+    }
+  }
+);
+
 module.exports = router;

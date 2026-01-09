@@ -396,8 +396,19 @@ class HospitalController {
       let totalHospitals = 0;
       let privateHospitals = 0;
       let governmentHospitals = 0;
+      let debugInfo = {};
 
       try {
+        // Get all hospitals for debugging
+        const allHospitals = await Hospital.findAll({
+          attributes: ['id', 'name', 'type', 'isActive']
+        });
+        
+        debugInfo.allHospitals = allHospitals;
+        debugInfo.totalInDb = allHospitals.length;
+        debugInfo.activeInDb = allHospitals.filter(h => h.isActive).length;
+        debugInfo.inactiveInDb = allHospitals.filter(h => !h.isActive).length;
+
         totalHospitals = await Hospital.count({
           where: { isActive: true }
         });
@@ -415,8 +426,16 @@ class HospitalController {
             type: 'Government'
           }
         });
+
+        debugInfo.queries = {
+          totalHospitals,
+          privateHospitals,
+          governmentHospitals
+        };
+
       } catch (dbError) {
         logger.warn('Database error in hospital stats, using fallback data:', dbError.message);
+        debugInfo.error = dbError.message;
         // Use fallback data if database queries fail
         totalHospitals = 0;
         privateHospitals = 0;
@@ -429,7 +448,8 @@ class HospitalController {
           totalHospitals,
           privateHospitals,
           governmentHospitals
-        }
+        },
+        debug: process.env.NODE_ENV === 'development' ? debugInfo : undefined
       });
 
     } catch (error) {
