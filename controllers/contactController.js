@@ -19,30 +19,33 @@ class ContactController {
         consentGiven
       } = req.body;
 
-      // Generate unique submission ID
-      const submissionId = crypto.randomBytes(16).toString('hex');
-
-      // Create contact form entry with encryption
-      const savedForm = await ContactForm.createEncrypted({
-        firstName,
-        lastName,
-        email,
-        phone: phone || null,
-        institution: institution || null,
-        partneringCategory,
-        message,
-        consentGiven,
-        ipAddress: req.ip || req.connection.remoteAddress,
-        userAgent: req.get('User-Agent') || 'Unknown'
-      }, {
-        userId: 'anonymous',
-        ipAddress: req.ip || req.connection.remoteAddress,
-        userAgent: req.get('User-Agent') || 'Unknown'
+      // Create contact form entry using raw SQL (no encryption - plain text storage)
+      const insertResult = await sequelize.query(`
+        INSERT INTO contact_forms (
+          first_name, last_name, email, phone, institution, 
+          partnership_category, message, consent_given, 
+          submission_date, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      `, {
+        replacements: [
+          firstName,
+          lastName,
+          email,
+          phone || null,
+          institution || null,
+          partneringCategory,
+          message,
+          consentGiven,
+          new Date()
+        ],
+        type: sequelize.QueryTypes.INSERT
       });
+
+      const savedFormId = insertResult[0];
 
       // Log successful submission
       logger.auditLog('CONTACT_FORM_SUBMITTED', 'anonymous', {
-        submissionId: savedForm._id,
+        submissionId: savedFormId,
         partneringCategory,
         hasPhone: !!phone,
         hasInstitution: !!institution,
@@ -52,29 +55,46 @@ class ContactController {
 
       // Send notification emails
       try {
-        const decryptedData = savedForm.getDecryptedData();
-        await emailService.sendContactFormNotification(decryptedData, savedForm.id, {
+        // Get the saved form data for email notification
+        const savedFormsResult = await sequelize.query(
+          'SELECT * FROM contact_forms WHERE id = ?',
+          { 
+            replacements: [savedFormId],
+            type: sequelize.QueryTypes.SELECT
+          }
+        );
+        const savedForm = savedFormsResult[0];
+
+        await emailService.sendContactFormNotification({
+          firstName: savedForm.first_name,
+          lastName: savedForm.last_name,
+          email: savedForm.email,
+          phone: savedForm.phone,
+          institution: savedForm.institution,
+          partneringCategory: savedForm.partnership_category,
+          message: savedForm.message
+        }, savedFormId, {
           ipAddress: req.ip || req.connection.remoteAddress,
           userAgent: req.get('User-Agent') || 'Unknown'
         });
         
         logger.auditLog('EMAIL_NOTIFICATIONS_SENT', 'system', {
-          submissionId: savedForm.id,
-          recipientEmail: decryptedData.email
+          submissionId: savedFormId,
+          recipientEmail: savedForm.email
         }, req);
       } catch (emailError) {
         // Log email error but don't fail the submission
         logger.error('Email notification failed:', {
-          submissionId: savedForm.id,
+          submissionId: savedFormId,
           error: emailError.message
         });
       }
 
-      // Return success response (don't expose internal IDs)
+      // Return success response
       res.status(201).json({
         success: true,
         message: 'Thank you for your submission. We will contact you within 2-3 business days.',
-        submissionId: savedForm.id,
+        submissionId: savedFormId,
         estimatedResponseTime: '2-3 business days'
       });
 
@@ -107,63 +127,86 @@ class ContactController {
         search
       } = req.query;
 
-      // Build Sequelize where clause
-      const whereClause = {};
+      // Build SQL WHERE clause manually to avoid field mapping issues
+      let whereConditions = [];
+      let replacements = [];
       
       if (status) {
-        whereClause.status = status;
+        whereConditions.push('status = ?');
+        replacements.push(status);
       }
       
       if (partneringCategory) {
-        whereClause.partneringCategory = partneringCategory;
+        whereConditions.push('partnership_category = ?');
+        replacements.push(partneringCategory);
       }
       
-      if (startDate || endDate) {
-        const { Op } = require('sequelize');
-        whereClause.submissionDate = {};
-        if (startDate) {
-          whereClause.submissionDate[Op.gte] = new Date(startDate);
-        }
-        if (endDate) {
-          whereClause.submissionDate[Op.lte] = new Date(endDate);
-        }
+      if (startDate) {
+        whereConditions.push('submission_date >= ?');
+        replacements.push(new Date(startDate));
+      }
+      
+      if (endDate) {
+        whereConditions.push('submission_date <= ?');
+        replacements.push(new Date(endDate));
       }
 
-      // Execute query with pagination
-      const options = {
-        where: whereClause,
-        limit: parseInt(limit),
-        offset: (parseInt(page) - 1) * parseInt(limit),
-        order: [['submissionDate', 'DESC']]
-      };
-
-      const { count: total, rows: forms } = await ContactForm.findAndCountAll(options);
-
-      // Decrypt data for admin view
-      const decryptedForms = forms.map(form => form.getDecryptedData());
-
-      // Filter by search term if provided (after decryption)
-      let filteredForms = decryptedForms;
       if (search) {
-        const searchTerm = search.toLowerCase();
-        filteredForms = decryptedForms.filter(form => 
-          form.firstName?.toLowerCase().includes(searchTerm) ||
-          form.lastName?.toLowerCase().includes(searchTerm) ||
-          form.email?.toLowerCase().includes(searchTerm) ||
-          form.institution?.toLowerCase().includes(searchTerm)
-        );
+        whereConditions.push('(first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR institution LIKE ?)');
+        const searchTerm = `%${search}%`;
+        replacements.push(searchTerm, searchTerm, searchTerm, searchTerm);
       }
 
-      logger.auditLog('ADMIN_VIEWED_SUBMISSIONS', req.user.username, {
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      
+      // Get total count
+      const [countResult] = await sequelize.query(
+        `SELECT COUNT(*) as total FROM contact_forms ${whereClause}`,
+        { replacements }
+      );
+      const total = countResult[0].total;
+
+      // Get paginated results
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      const [forms] = await sequelize.query(`
+        SELECT id, first_name, last_name, email, phone, institution, 
+               partnership_category, message, status, consent_given, 
+               submission_date, createdAt, updatedAt
+        FROM contact_forms 
+        ${whereClause}
+        ORDER BY submission_date DESC 
+        LIMIT ? OFFSET ?
+      `, { 
+        replacements: [...replacements, parseInt(limit), offset]
+      });
+
+      // Map the results to match the expected format
+      const contactsData = forms.map(form => ({
+        id: form.id,
+        firstName: form.first_name,
+        lastName: form.last_name,
+        email: form.email,
+        phone: form.phone,
+        institution: form.institution,
+        partneringCategory: form.partnership_category,
+        message: form.message,
+        status: form.status,
+        consentGiven: form.consent_given,
+        submissionDate: form.submission_date,
+        createdAt: form.createdAt,
+        updatedAt: form.updatedAt
+      }));
+
+      logger.auditLog('ADMIN_VIEWED_SUBMISSIONS', req.user?.username || 'anonymous', {
         query: req.query,
-        resultCount: filteredForms.length,
+        resultCount: contactsData.length,
         page: parseInt(page)
       }, req);
 
       res.json({
         success: true,
         data: {
-          contacts: filteredForms,
+          contacts: contactsData,
           pagination: {
             currentPage: parseInt(page),
             totalPages: Math.ceil(total / parseInt(limit)),
@@ -184,7 +227,8 @@ class ContactController {
 
       res.status(500).json({
         error: 'Failed to retrieve contact forms',
-        message: 'Internal server error'
+        message: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
@@ -194,19 +238,44 @@ class ContactController {
     try {
       const { id } = req.params;
 
-      const form = await ContactForm.findByPk(id);
+      // Use raw SQL to avoid field mapping issues
+      const [forms] = await sequelize.query(`
+        SELECT id, first_name, last_name, email, phone, institution, 
+               partnership_category, message, status, consent_given, 
+               submission_date, createdAt, updatedAt
+        FROM contact_forms 
+        WHERE id = ?
+      `, { 
+        replacements: [id]
+      });
 
-      if (!form) {
+      if (forms.length === 0) {
         return res.status(404).json({
           error: 'Contact form not found',
           message: 'The requested contact form does not exist'
         });
       }
 
-      // Decrypt data for admin view
-      const decryptedForm = form.getDecryptedData();
+      const form = forms[0];
 
-      logger.auditLog('ADMIN_VIEWED_CONTACT_DETAIL', req.user.username, {
+      // Map the result to match the expected format
+      const contactData = {
+        id: form.id,
+        firstName: form.first_name,
+        lastName: form.last_name,
+        email: form.email,
+        phone: form.phone,
+        institution: form.institution,
+        partneringCategory: form.partnership_category,
+        message: form.message,
+        status: form.status,
+        consentGiven: form.consent_given,
+        submissionDate: form.submission_date,
+        createdAt: form.createdAt,
+        updatedAt: form.updatedAt
+      };
+
+      logger.auditLog('ADMIN_VIEWED_CONTACT_DETAIL', req.user?.username || 'anonymous', {
         contactId: id,
         status: form.status
       }, req);
@@ -214,7 +283,7 @@ class ContactController {
       res.json({
         success: true,
         data: {
-          contact: decryptedForm
+          contact: contactData
         }
       });
 
@@ -227,11 +296,11 @@ class ContactController {
 
       res.status(500).json({
         error: 'Failed to retrieve contact form',
-        message: 'Internal server error'
+        message: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
-
   // Update contact form status (admin only)
   async updateContactFormStatus(req, res) {
     try {
@@ -246,40 +315,36 @@ class ContactController {
         });
       }
 
-      const form = await ContactForm.findByPk(id);
-      if (!form) {
-        return res.status(404).json({
-          error: 'Contact form not found',
-          message: 'The requested contact form does not exist'
-        });
-      }
-
-      const oldStatus = form.status;
-
-      const [updatedRowsCount] = await ContactForm.update(
-        { 
-          status,
-          modifiedBy: req.user.username,
-          lastModified: new Date()
-        },
-        { 
-          where: { id },
-          userId: req.user.username,
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent')
-        }
+      // Check if contact exists using raw SQL
+      const [existingForms] = await sequelize.query(
+        'SELECT id, status FROM contact_forms WHERE id = ?',
+        { replacements: [id] }
       );
 
-      if (updatedRowsCount === 0) {
+      if (existingForms.length === 0) {
         return res.status(404).json({
           error: 'Contact form not found',
           message: 'The requested contact form does not exist'
         });
       }
 
-      const updatedForm = await ContactForm.findByPk(id);
+      const oldStatus = existingForms[0].status;
 
-      logger.auditLog('CONTACT_FORM_STATUS_UPDATED', req.user.username, {
+      // Update status using raw SQL
+      const [updateResult] = await sequelize.query(
+        'UPDATE contact_forms SET status = ?, updatedAt = NOW() WHERE id = ?',
+        { replacements: [status, id] }
+      );
+
+      // Get updated form
+      const [updatedForms] = await sequelize.query(
+        'SELECT id, status, updatedAt FROM contact_forms WHERE id = ?',
+        { replacements: [id] }
+      );
+
+      const updatedForm = updatedForms[0];
+
+      logger.auditLog('CONTACT_FORM_STATUS_UPDATED', req.user?.username || 'anonymous', {
         submissionId: id,
         oldStatus,
         newStatus: status,
@@ -292,8 +357,7 @@ class ContactController {
         data: {
           id: updatedForm.id,
           status: updatedForm.status,
-          lastModified: updatedForm.lastModified,
-          modifiedBy: updatedForm.modifiedBy
+          updatedAt: updatedForm.updatedAt
         }
       });
 
@@ -306,7 +370,8 @@ class ContactController {
 
       res.status(500).json({
         error: 'Failed to update contact form status',
-        message: 'Internal server error'
+        message: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
@@ -316,24 +381,41 @@ class ContactController {
     try {
       const { id } = req.params;
 
-      const form = await ContactForm.findByPk(id);
-      if (!form) {
+      // Check if contact exists and get data for audit log using raw SQL
+      const [existingForms] = await sequelize.query(`
+        SELECT id, first_name, last_name, email, partnership_category, submission_date
+        FROM contact_forms 
+        WHERE id = ?
+      `, { 
+        replacements: [id] 
+      });
+
+      if (existingForms.length === 0) {
         return res.status(404).json({
           error: 'Contact form not found',
           message: 'The requested contact form does not exist'
         });
       }
 
+      const form = existingForms[0];
+
       // Store form data for audit log before deletion
-      const formData = form.getDecryptedData();
+      const formData = {
+        id: form.id,
+        firstName: form.first_name,
+        lastName: form.last_name,
+        email: form.email,
+        partneringCategory: form.partnership_category,
+        submissionDate: form.submission_date
+      };
 
-      await form.destroy({
-        userId: req.user.username,
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      });
+      // Delete the contact using raw SQL
+      const [deleteResult] = await sequelize.query(
+        'DELETE FROM contact_forms WHERE id = ?',
+        { replacements: [id] }
+      );
 
-      logger.auditLog('CONTACT_FORM_DELETED', req.user.username, {
+      logger.auditLog('CONTACT_FORM_DELETED', req.user?.username || 'anonymous', {
         submissionId: id,
         partneringCategory: formData.partneringCategory,
         submissionDate: formData.submissionDate,
@@ -354,7 +436,8 @@ class ContactController {
 
       res.status(500).json({
         error: 'Failed to delete contact form',
-        message: 'Internal server error'
+        message: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
@@ -364,60 +447,63 @@ class ContactController {
     try {
       const { Op } = require('sequelize');
       
-      // Total submissions
-      const totalSubmissions = await ContactForm.count();
+      // Use raw queries to avoid field mapping issues
+      const [totalResult] = await sequelize.query('SELECT COUNT(*) as count FROM contact_forms');
+      const totalSubmissions = totalResult[0].count;
       
       // This month's submissions
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const thisMonth = await ContactForm.count({
-        where: {
-          submissionDate: {
-            [Op.gte]: startOfMonth
-          }
-        }
-      });
+      const [thisMonthResult] = await sequelize.query(
+        'SELECT COUNT(*) as count FROM contact_forms WHERE submission_date >= ?',
+        { replacements: [startOfMonth] }
+      );
+      const thisMonth = thisMonthResult[0].count;
 
       // Last 30 days
       const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const recentSubmissions = await ContactForm.count({
-        where: {
-          submissionDate: {
-            [Op.gte]: last30Days
-          }
-        }
-      });
+      const [recentResult] = await sequelize.query(
+        'SELECT COUNT(*) as count FROM contact_forms WHERE submission_date >= ?',
+        { replacements: [last30Days] }
+      );
+      const recentSubmissions = recentResult[0].count;
 
       // Category breakdown
-      const categoryStats = await ContactForm.findAll({
-        attributes: [
-          'partneringCategory',
-          [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
-          [sequelize.fn('MAX', sequelize.col('submissionDate')), 'latestSubmission']
-        ],
-        group: ['partneringCategory'],
-        order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']],
-        raw: true
-      });
+      const [categoryStats] = await sequelize.query(`
+        SELECT partnership_category as partneringCategory, 
+               COUNT(*) as count, 
+               MAX(submission_date) as latestSubmission
+        FROM contact_forms 
+        GROUP BY partnership_category 
+        ORDER BY COUNT(*) DESC
+      `);
 
       // Status breakdown
-      const statusStats = await ContactForm.findAll({
-        attributes: [
-          'status',
-          [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-        ],
-        group: ['status'],
-        raw: true
-      });
+      const [statusStats] = await sequelize.query(`
+        SELECT status, COUNT(*) as count 
+        FROM contact_forms 
+        GROUP BY status
+      `);
 
-      // Pending submissions count
-      const pendingCount = await ContactForm.count({
-        where: { status: 'pending' }
-      });
+      // Individual status counts
+      const [pendingResult] = await sequelize.query('SELECT COUNT(*) as count FROM contact_forms WHERE status = "pending"');
+      const pendingCount = pendingResult[0].count;
 
-      logger.auditLog('ADMIN_VIEWED_CONTACT_STATS', req.user.username, {
+      const [reviewedResult] = await sequelize.query('SELECT COUNT(*) as count FROM contact_forms WHERE status = "reviewed"');
+      const reviewedCount = reviewedResult[0].count;
+
+      const [respondedResult] = await sequelize.query('SELECT COUNT(*) as count FROM contact_forms WHERE status = "responded"');
+      const respondedCount = respondedResult[0].count;
+
+      const [archivedResult] = await sequelize.query('SELECT COUNT(*) as count FROM contact_forms WHERE status = "archived"');
+      const archivedCount = archivedResult[0].count;
+
+      logger.auditLog('ADMIN_VIEWED_CONTACT_STATS', req.user?.username || 'anonymous', {
         totalSubmissions,
         thisMonth,
-        pendingCount
+        pendingCount,
+        reviewedCount,
+        respondedCount,
+        archivedCount
       }, req);
 
       res.json({
@@ -427,6 +513,9 @@ class ContactController {
           thisMonth,
           recentSubmissions,
           pendingCount,
+          reviewedCount,
+          respondedCount,
+          archivedCount,
           categoryBreakdown: categoryStats.map(stat => ({
             category: stat.partneringCategory,
             count: parseInt(stat.count),
@@ -447,7 +536,8 @@ class ContactController {
 
       res.status(500).json({
         error: 'Failed to retrieve statistics',
-        message: 'Internal server error'
+        message: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
@@ -455,8 +545,9 @@ class ContactController {
   // Health check endpoint
   async healthCheck(req, res) {
     try {
-      // Check database connection
-      const dbCheck = await ContactForm.count({ limit: 1 });
+      // Check database connection using raw SQL
+      const [dbResult] = await sequelize.query('SELECT COUNT(*) as count FROM contact_forms LIMIT 1');
+      const dbCheck = dbResult[0].count !== undefined;
       
       // Check email service
       let emailCheck = false;
@@ -471,7 +562,7 @@ class ContactController {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         services: {
-          database: dbCheck !== undefined ? 'healthy' : 'unhealthy',
+          database: dbCheck ? 'healthy' : 'unhealthy',
           email: emailCheck ? 'healthy' : 'unhealthy'
         },
         version: process.env.npm_package_version || '1.0.0'

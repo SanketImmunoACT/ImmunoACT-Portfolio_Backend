@@ -1,127 +1,47 @@
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../config/database');
-const crypto = require('crypto');
-
-// Encryption helper functions
-const algorithm = 'aes-256-gcm';
-const secretKey = Buffer.from(process.env.DB_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex'), 'hex');
-
-const encrypt = (text) => {
-  if (!text) return null;
-  try {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', secretKey.slice(0, 32), iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    
-    return JSON.stringify({
-      encrypted,
-      iv: iv.toString('hex')
-    });
-  } catch (error) {
-    console.error('Encryption error:', error);
-    return null;
-  }
-};
-
-const decrypt = (encryptedData) => {
-  if (!encryptedData) return null;
-  try {
-    const data = JSON.parse(encryptedData);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', secretKey.slice(0, 32), Buffer.from(data.iv, 'hex'));
-    let decrypted = decipher.update(data.encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return null;
-  }
-};
 
 class ContactForm extends Model {
-  // Instance method to get decrypted data
-  getDecryptedData() {
-    return {
-      id: this.id,
-      firstName: decrypt(this.firstName),
-      lastName: decrypt(this.lastName),
-      email: decrypt(this.email),
-      phone: decrypt(this.phone),
-      institution: decrypt(this.institution),
-      message: decrypt(this.message),
-      partneringCategory: this.partneringCategory,
-      status: this.status,
-      submissionDate: this.submissionDate,
-      ipAddress: this.ipAddress,
-      userAgent: this.userAgent,
-      consentGiven: this.consentGiven,
-      dataRetentionDate: this.dataRetentionDate,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt
-    };
-  }
-
-  // Static method to create with encryption
-  static async createEncrypted(data) {
-    const encryptedData = {
-      ...data,
-      firstName: encrypt(data.firstName),
-      lastName: encrypt(data.lastName),
-      email: encrypt(data.email),
-      phone: data.phone ? encrypt(data.phone) : null,
-      institution: data.institution ? encrypt(data.institution) : null,
-      message: encrypt(data.message)
-    };
-    
-    return await this.create(encryptedData);
-  }
+  // No encryption - store data in plain text for MySQL Workbench visibility
+  // This matches the exact 11 required columns
 }
 
 ContactForm.init({
+  // Required 11 columns exactly as they exist in the database
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
   },
   
-  // Encrypted personal information (stored as TEXT to hold JSON)
   firstName: {
-    type: DataTypes.TEXT,
+    type: DataTypes.TEXT, // Keep as TEXT to match current database
     allowNull: false,
-    comment: 'Encrypted first name'
+    field: 'first_name'
   },
   
   lastName: {
-    type: DataTypes.TEXT,
+    type: DataTypes.TEXT, // Keep as TEXT to match current database
     allowNull: false,
-    comment: 'Encrypted last name'
+    field: 'last_name'
   },
   
   email: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-    comment: 'Encrypted email address'
+    type: DataTypes.TEXT, // Keep as TEXT to match current database
+    allowNull: false
+    // Remove index since TEXT fields can't have regular indexes
   },
   
   phone: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Encrypted phone number'
+    type: DataTypes.TEXT, // Keep as TEXT to match current database
+    allowNull: true
   },
   
   institution: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Encrypted institution name'
+    type: DataTypes.TEXT, // Keep as TEXT to match current database
+    allowNull: true
   },
   
-  message: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-    comment: 'Encrypted message content'
-  },
-  
-  // Non-sensitive data (can be stored as plain text)
   partneringCategory: {
     type: DataTypes.ENUM(
       'Clinical Collaboration',
@@ -135,79 +55,43 @@ ContactForm.init({
       'Other'
     ),
     allowNull: false,
-    comment: 'Type of partnership inquiry'
+    field: 'partnership_category'
   },
   
-  // Metadata for compliance
-  submissionDate: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
-    comment: 'When the form was submitted'
-  },
-  
-  ipAddress: {
-    type: DataTypes.STRING(45), // IPv6 support
-    allowNull: false,
-    comment: 'IP address of submitter'
-  },
-  
-  userAgent: {
+  message: {
     type: DataTypes.TEXT,
-    allowNull: false,
-    comment: 'Browser user agent string'
+    allowNull: false
   },
   
-  // Status tracking
   status: {
     type: DataTypes.ENUM('pending', 'reviewed', 'responded', 'archived'),
     allowNull: false,
-    defaultValue: 'pending',
-    comment: 'Current status of the inquiry'
+    defaultValue: 'pending'
   },
   
-  // Compliance fields
   consentGiven: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: false,
-    comment: 'Whether user consented to data processing'
+    field: 'consent_given'
   },
   
-  dataRetentionDate: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: () => {
-      const retentionDays = parseInt(process.env.DATA_RETENTION_DAYS) || 2555; // ~7 years
-      return new Date(Date.now() + (retentionDays * 24 * 60 * 60 * 1000));
-    },
-    comment: 'Date when this record should be automatically deleted'
-  },
-  
-  // Audit trail
-  lastModified: {
+  submissionDate: {
     type: DataTypes.DATE,
     allowNull: false,
     defaultValue: DataTypes.NOW,
-    comment: 'Last modification timestamp'
-  },
-  
-  modifiedBy: {
-    type: DataTypes.STRING(100),
-    allowNull: false,
-    defaultValue: 'system',
-    comment: 'Who last modified this record'
+    field: 'submission_date'
   }
 }, {
   sequelize,
   modelName: 'ContactForm',
   tableName: 'contact_forms',
-  timestamps: true, // Adds createdAt and updatedAt
+  timestamps: true, // Enable createdAt and updatedAt
   
-  // Indexes for performance and compliance
+  // Only indexes that work with current column types
   indexes: [
     {
-      fields: ['submissionDate'],
+      fields: ['submission_date'],
       name: 'idx_submission_date'
     },
     {
@@ -215,28 +99,21 @@ ContactForm.init({
       name: 'idx_status'
     },
     {
-      fields: ['partneringCategory'],
-      name: 'idx_partnering_category'
-    },
-    {
-      fields: ['dataRetentionDate'],
-      name: 'idx_data_retention_date'
+      fields: ['partnership_category'],
+      name: 'idx_partnership_category'
     },
     {
       fields: ['createdAt'],
       name: 'idx_created_at'
+    },
+    {
+      fields: ['updatedAt'],
+      name: 'idx_updated_at'
     }
-  ],
-  
-  // Hooks for automatic encryption and audit trail
-  hooks: {
-    beforeUpdate: (instance) => {
-      instance.lastModified = new Date();
-    }
-  }
+  ]
 });
 
-// Create audit log table for compliance
+// Create audit log table for compliance (simplified)
 const AuditLog = sequelize.define('AuditLog', {
   id: {
     type: DataTypes.INTEGER,
@@ -269,18 +146,6 @@ const AuditLog = sequelize.define('AuditLog', {
     comment: 'User who performed the action'
   },
   
-  ipAddress: {
-    type: DataTypes.STRING(45),
-    allowNull: true,
-    comment: 'IP address of the user'
-  },
-  
-  userAgent: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Browser user agent'
-  },
-  
   details: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -308,10 +173,6 @@ const AuditLog = sequelize.define('AuditLog', {
     {
       fields: ['userId'],
       name: 'idx_audit_user'
-    },
-    {
-      fields: ['tableName', 'recordId'],
-      name: 'idx_audit_table_record'
     }
   ]
 });
@@ -323,8 +184,6 @@ ContactForm.addHook('afterCreate', async (instance, options) => {
     tableName: 'contact_forms',
     recordId: instance.id,
     userId: options.userId || 'system',
-    ipAddress: options.ipAddress,
-    userAgent: options.userAgent,
     details: {
       partneringCategory: instance.partneringCategory,
       consentGiven: instance.consentGiven
@@ -338,8 +197,6 @@ ContactForm.addHook('afterUpdate', async (instance, options) => {
     tableName: 'contact_forms',
     recordId: instance.id,
     userId: options.userId || 'system',
-    ipAddress: options.ipAddress,
-    userAgent: options.userAgent,
     details: {
       changes: instance.changed(),
       status: instance.status
@@ -353,10 +210,8 @@ ContactForm.addHook('afterDestroy', async (instance, options) => {
     tableName: 'contact_forms',
     recordId: instance.id,
     userId: options.userId || 'system',
-    ipAddress: options.ipAddress,
-    userAgent: options.userAgent,
     details: {
-      reason: 'Data retention policy or manual deletion'
+      reason: 'Manual deletion'
     }
   });
 });
