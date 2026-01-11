@@ -64,19 +64,8 @@ class HospitalController {
 
       // Add services filter if provided
       if (services.length > 0) {
-        const serviceConditions = services.map(service => 
-          Hospital.sequelize.literal(`JSON_CONTAINS(services, '"${service}"')`)
-        );
-        
-        if (serviceConditions.length === 1) {
-          whereConditions[Op.and] = whereConditions[Op.and] || [];
-          whereConditions[Op.and].push(serviceConditions[0]);
-        } else {
-          whereConditions[Op.and] = whereConditions[Op.and] || [];
-          whereConditions[Op.and].push({
-            [Op.or]: serviceConditions
-          });
-        }
+        // Services field has been removed, so we'll ignore this filter
+        // This maintains backward compatibility
       }
 
       // Fetch hospitals from database
@@ -144,7 +133,9 @@ class HospitalController {
         search,
         services, 
         page = 1,
-        limit = 10
+        limit = 10,
+        sortBy,
+        sortOrder
       } = req.query;
 
       const whereConditions = { isActive: true };
@@ -176,19 +167,18 @@ class HospitalController {
 
       // Add services filter if provided
       if (services) {
-        const serviceArray = Array.isArray(services) ? services : [services];
-        const serviceConditions = serviceArray.map(service => 
-          Hospital.sequelize.literal(`JSON_CONTAINS(services, '"${service}"')`)
-        );
+        // Services field has been removed, so we'll ignore this filter
+        // This maintains backward compatibility
+      }
+
+      // Build order clause
+      let order = [['name', 'ASC']]; // Default sorting
+      if (sortBy && sortOrder) {
+        const validSortFields = ['name', 'city', 'state', 'type', 'createdAt'];
+        const validSortOrders = ['asc', 'desc'];
         
-        if (serviceConditions.length === 1) {
-          whereConditions[Op.and] = whereConditions[Op.and] || [];
-          whereConditions[Op.and].push(serviceConditions[0]);
-        } else {
-          whereConditions[Op.and] = whereConditions[Op.and] || [];
-          whereConditions[Op.and].push({
-            [Op.or]: serviceConditions
-          });
+        if (validSortFields.includes(sortBy) && validSortOrders.includes(sortOrder.toLowerCase())) {
+          order = [[sortBy, sortOrder.toUpperCase()]];
         }
       }
 
@@ -196,7 +186,7 @@ class HospitalController {
         where: whereConditions,
         limit: parseInt(limit),
         offset: offset,
-        order: [['name', 'ASC']]
+        order: order
       });
 
       const totalPages = Math.ceil(hospitals.count / parseInt(limit));
@@ -358,9 +348,73 @@ class HospitalController {
   }
 
   /**
-   * Delete hospital (admin only)
+   * Delete hospital (admin only) - Soft Delete
    */
   async deleteHospital(req, res) {
+    try {
+      const { id } = req.params;
+      const { permanent = false } = req.query; // Allow permanent delete via query param
+
+      const hospital = await Hospital.findByPk(id);
+      if (!hospital) {
+        return res.status(404).json({
+          success: false,
+          message: 'Hospital not found'
+        });
+      }
+
+      if (permanent === 'true') {
+        // Hard delete - only for super admins with explicit confirmation
+        await hospital.destroy();
+        
+        // Log the permanent deletion for audit
+        logger.warn('Hospital permanently deleted', {
+          hospitalId: id,
+          hospitalName: hospital.name,
+          deletedBy: req.user?.username || 'unknown',
+          ip: req.ip,
+          timestamp: new Date().toISOString()
+        });
+
+        res.json({
+          success: true,
+          message: 'Hospital permanently deleted from database'
+        });
+      } else {
+        // Soft delete - default behavior
+        await hospital.update({ 
+          isActive: false,
+          deletedAt: new Date() // Add deletion timestamp
+        });
+
+        // Log the soft deletion for audit
+        logger.info('Hospital soft deleted', {
+          hospitalId: id,
+          hospitalName: hospital.name,
+          deletedBy: req.user?.username || 'unknown',
+          ip: req.ip,
+          timestamp: new Date().toISOString()
+        });
+
+        res.json({
+          success: true,
+          message: 'Hospital deleted successfully (can be restored)'
+        });
+      }
+
+    } catch (error) {
+      logger.error('Delete hospital error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'An error occurred while deleting the hospital'
+      });
+    }
+  }
+
+  /**
+   * Restore deleted hospital (admin only)
+   */
+  async restoreHospital(req, res) {
     try {
       const { id } = req.params;
 
@@ -372,18 +426,82 @@ class HospitalController {
         });
       }
 
-      await hospital.update({ isActive: false });
+      if (hospital.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'Hospital is already active'
+        });
+      }
+
+      await hospital.update({ 
+        isActive: true,
+        deletedAt: null 
+      });
+
+      // Log the restoration for audit
+      logger.info('Hospital restored', {
+        hospitalId: id,
+        hospitalName: hospital.name,
+        restoredBy: req.user?.username || 'unknown',
+        ip: req.ip,
+        timestamp: new Date().toISOString()
+      });
 
       res.json({
         success: true,
-        message: 'Hospital deleted successfully'
+        message: 'Hospital restored successfully',
+        data: hospital
       });
 
     } catch (error) {
-      logger.error('Delete hospital error:', error);
+      logger.error('Restore hospital error:', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while deleting the hospital'
+        message: 'An error occurred while restoring the hospital'
+      });
+    }
+  }
+
+  /**
+   * Get deleted hospitals (admin only)
+   */
+  async getDeletedHospitals(req, res) {
+    try {
+      const { 
+        page = 1,
+        limit = 10
+      } = req.query;
+
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+
+      const hospitals = await Hospital.findAndCountAll({
+        where: { isActive: false },
+        limit: parseInt(limit),
+        offset: offset,
+        order: [['updatedAt', 'DESC']]
+      });
+
+      const totalPages = Math.ceil(hospitals.count / parseInt(limit));
+      const currentPage = parseInt(page);
+
+      res.json({
+        success: true,
+        data: {
+          hospitals: hospitals.rows,
+          total: hospitals.count,
+          currentPage: currentPage,
+          totalPages: totalPages,
+          hasNext: currentPage < totalPages,
+          hasPrev: currentPage > 1,
+          limit: parseInt(limit)
+        }
+      });
+
+    } catch (error) {
+      logger.error('Get deleted hospitals error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'An error occurred while fetching deleted hospitals'
       });
     }
   }

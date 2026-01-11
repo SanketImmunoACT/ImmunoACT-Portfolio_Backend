@@ -87,15 +87,10 @@ const validateHospitalCreation = [
     .isURL()
     .withMessage('Invalid website URL'),
   
-  body('services')
+  body('type')
     .optional()
-    .isArray()
-    .withMessage('Services must be an array'),
-  
-  body('rating')
-    .optional()
-    .isFloat({ min: 0, max: 5 })
-    .withMessage('Rating must be between 0 and 5'),
+    .isIn(['Private', 'Government'])
+    .withMessage('Type must be either Private or Government'),
   
   handleValidationErrors
 ];
@@ -171,7 +166,7 @@ router.put('/:id',
 
 /**
  * @route   DELETE /api/hospitals/:id
- * @desc    Delete hospital (soft delete)
+ * @desc    Delete hospital (soft delete by default, permanent with ?permanent=true)
  * @access  Admin only
  */
 router.delete('/:id', 
@@ -179,6 +174,29 @@ router.delete('/:id',
   authorize('super_admin'), 
   validateHospitalId, 
   hospitalController.deleteHospital
+);
+
+/**
+ * @route   PUT /api/hospitals/:id/restore
+ * @desc    Restore soft-deleted hospital
+ * @access  Admin only
+ */
+router.put('/:id/restore', 
+  authenticateToken, 
+  authorize('super_admin'), 
+  validateHospitalId, 
+  hospitalController.restoreHospital
+);
+
+/**
+ * @route   GET /api/hospitals/deleted
+ * @desc    Get all soft-deleted hospitals
+ * @access  Admin only
+ */
+router.get('/deleted', 
+  authenticateToken, 
+  authorize('super_admin'), 
+  hospitalController.getDeletedHospitals
 );
 
 module.exports = router;

@@ -47,7 +47,7 @@ const Hospital = sequelize.define('Hospital', {
   },
   latitude: {
     type: DataTypes.DECIMAL(10, 8),
-    allowNull: false,
+    allowNull: true,
     validate: {
       min: -90,
       max: 90
@@ -55,7 +55,7 @@ const Hospital = sequelize.define('Hospital', {
   },
   longitude: {
     type: DataTypes.DECIMAL(11, 8),
-    allowNull: false,
+    allowNull: true,
     validate: {
       min: -180,
       max: 180
@@ -82,37 +82,20 @@ const Hospital = sequelize.define('Hospital', {
       isUrl: true
     }
   },
-  description: {
-    type: DataTypes.TEXT,
-    allowNull: true
-  },
-  services: {
-    type: DataTypes.JSON,
+  type: {
+    type: DataTypes.ENUM('Private', 'Government'),
     allowNull: true,
-    defaultValue: []
-  },
-  operatingHours: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: {}
+    defaultValue: 'Private'
   },
   isActive: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: true
   },
-  rating: {
-    type: DataTypes.DECIMAL(2, 1),
+  deletedAt: {
+    type: DataTypes.DATE,
     allowNull: true,
-    validate: {
-      min: 0,
-      max: 5
-    }
-  },
-  totalReviews: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0
+    defaultValue: null
   }
 }, {
   tableName: 'hospitals',

@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "seed": "node scripts/seedDatabase.js",
     "seed:hospitals": "node scripts/seedHospitals.js",
+    "migrate:remove-hospital-columns": "node scripts/removeUnusedHospitalColumns.js",
     "generate:secrets": "node scripts/generateSecrets.js"
   },
   "dependencies": {
