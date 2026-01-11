@@ -11,10 +11,8 @@ const getPublicCareers = async (req, res) => {
       page = 1, 
       limit = 100, 
       department, 
-      location,
       employmentType,
       experienceLevel,
-      isRemote,
       search,
       sortBy = 'createdAt',
       sortOrder = 'DESC'
@@ -31,10 +29,6 @@ const getPublicCareers = async (req, res) => {
       whereClause.department = { [Op.like]: `%${department}%` };
     }
     
-    if (location) {
-      whereClause.location = { [Op.like]: `%${location}%` };
-    }
-    
     if (employmentType) {
       whereClause.employmentType = employmentType;
     }
@@ -43,22 +37,15 @@ const getPublicCareers = async (req, res) => {
       whereClause.experienceLevel = experienceLevel;
     }
     
-    if (isRemote !== undefined) {
-      whereClause.isRemote = isRemote === 'true';
-    }
-    
     if (search) {
       whereClause[Op.or] = [
         { title: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { department: { [Op.like]: `%${search}%` } },
-        { location: { [Op.like]: `%${search}%` } }
+        { department: { [Op.like]: `%${search}%` } }
       ];
     }
 
     const { count, rows: careers } = await Career.findAndCountAll({
       where: whereClause,
-      // Don't include user information for public API
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [[sortBy, sortOrder.toUpperCase()]]
@@ -83,6 +70,7 @@ const getPublicCareers = async (req, res) => {
     });
   }
 };
+
 const getAllCareers = async (req, res) => {
   try {
     const { 
@@ -90,10 +78,8 @@ const getAllCareers = async (req, res) => {
       limit = 10, 
       status, 
       department, 
-      location,
       employmentType,
       experienceLevel,
-      isRemote,
       search,
       sortBy = 'createdAt',
       sortOrder = 'DESC'
@@ -112,10 +98,6 @@ const getAllCareers = async (req, res) => {
       whereClause.department = { [Op.like]: `%${department}%` };
     }
     
-    if (location) {
-      whereClause.location = { [Op.like]: `%${location}%` };
-    }
-    
     if (employmentType) {
       whereClause.employmentType = employmentType;
     }
@@ -124,16 +106,10 @@ const getAllCareers = async (req, res) => {
       whereClause.experienceLevel = experienceLevel;
     }
     
-    if (isRemote !== undefined) {
-      whereClause.isRemote = isRemote === 'true';
-    }
-    
     if (search) {
       whereClause[Op.or] = [
         { title: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { department: { [Op.like]: `%${search}%` } },
-        { location: { [Op.like]: `%${search}%` } }
+        { department: { [Op.like]: `%${search}%` } }
       ];
     }
 
@@ -157,7 +133,7 @@ const getAllCareers = async (req, res) => {
     });
 
     logger.auditLog('CAREERS_VIEWED', req.user.username, {
-      filters: { status, department, location, employmentType, experienceLevel, isRemote, search },
+      filters: { status, department, employmentType, experienceLevel, search },
       resultCount: careers.length,
       ip: req.ip
     }, req);
@@ -242,51 +218,23 @@ const createCareer = async (req, res) => {
     const {
       title,
       department,
-      location,
       employmentType = 'full-time',
       experienceLevel = 'mid-level',
-      salaryRange,
-      description,
       responsibilities,
       requirements,
       qualifications,
-      benefits,
-      applicationDeadline,
-      status = 'draft',
-      isRemote = false,
-      tags,
-      applicationEmail,
-      applicationUrl,
-      metaTitle,
-      metaDescription,
-      urgency = 'medium',
-      workSchedule,
-      travelRequired = false
+      status = 'draft'
     } = req.body;
 
     const career = await Career.create({
       title,
       department,
-      location,
       employmentType,
       experienceLevel,
-      salaryRange,
-      description,
       responsibilities: Array.isArray(responsibilities) ? responsibilities : [],
-      requirements: Array.isArray(requirements) ? requirements : [],
+      desired_qualities: Array.isArray(requirements) ? requirements : [],
       qualifications: Array.isArray(qualifications) ? qualifications : [],
-      benefits: Array.isArray(benefits) ? benefits : [],
-      applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
       status,
-      isRemote,
-      tags: Array.isArray(tags) ? tags : [],
-      applicationEmail,
-      applicationUrl,
-      metaTitle,
-      metaDescription,
-      urgency,
-      workSchedule,
-      travelRequired,
       createdBy: req.user.id,
       publishedBy: status === 'active' ? req.user.id : null,
       publishedAt: status === 'active' ? new Date() : null
@@ -328,26 +276,12 @@ const updateCareer = async (req, res) => {
     const {
       title,
       department,
-      location,
       employmentType,
       experienceLevel,
-      salaryRange,
-      description,
       responsibilities,
       requirements,
       qualifications,
-      benefits,
-      applicationDeadline,
-      status,
-      isRemote,
-      tags,
-      applicationEmail,
-      applicationUrl,
-      metaTitle,
-      metaDescription,
-      urgency,
-      workSchedule,
-      travelRequired
+      status
     } = req.body;
 
     const career = await Career.findByPk(id);
@@ -369,16 +303,11 @@ const updateCareer = async (req, res) => {
     
     if (title !== undefined) updateData.title = title;
     if (department !== undefined) updateData.department = department;
-    if (location !== undefined) updateData.location = location;
     if (employmentType !== undefined) updateData.employmentType = employmentType;
     if (experienceLevel !== undefined) updateData.experienceLevel = experienceLevel;
-    if (salaryRange !== undefined) updateData.salaryRange = salaryRange;
-    if (description !== undefined) updateData.description = description;
     if (responsibilities !== undefined) updateData.responsibilities = Array.isArray(responsibilities) ? responsibilities : [];
-    if (requirements !== undefined) updateData.requirements = Array.isArray(requirements) ? requirements : [];
+    if (requirements !== undefined) updateData.desired_qualities = Array.isArray(requirements) ? requirements : [];
     if (qualifications !== undefined) updateData.qualifications = Array.isArray(qualifications) ? qualifications : [];
-    if (benefits !== undefined) updateData.benefits = Array.isArray(benefits) ? benefits : [];
-    if (applicationDeadline !== undefined) updateData.applicationDeadline = applicationDeadline ? new Date(applicationDeadline) : null;
     if (status !== undefined) {
       updateData.status = status;
       if (status === 'active' && oldStatus !== 'active') {
@@ -389,15 +318,6 @@ const updateCareer = async (req, res) => {
         updateData.closedAt = new Date();
       }
     }
-    if (isRemote !== undefined) updateData.isRemote = isRemote;
-    if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags : [];
-    if (applicationEmail !== undefined) updateData.applicationEmail = applicationEmail;
-    if (applicationUrl !== undefined) updateData.applicationUrl = applicationUrl;
-    if (metaTitle !== undefined) updateData.metaTitle = metaTitle;
-    if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
-    if (urgency !== undefined) updateData.urgency = urgency;
-    if (workSchedule !== undefined) updateData.workSchedule = workSchedule;
-    if (travelRequired !== undefined) updateData.travelRequired = travelRequired;
 
     await career.update(updateData);
 
@@ -552,7 +472,6 @@ const getCareerStats = async (req, res) => {
     const totalCareers = await Career.count();
     const activeCareers = await Career.count({ where: { status: 'active' } });
     const draftCareers = await Career.count({ where: { status: 'draft' } });
-    const remoteCareers = await Career.count({ where: { isRemote: true } });
 
     logger.auditLog('CAREERS_STATS_VIEWED', req.user.username, {
       ip: req.ip
@@ -565,7 +484,6 @@ const getCareerStats = async (req, res) => {
       totalCareers,
       activeCareers,
       draftCareers,
-      remoteCareers,
       closedCareers: await Career.count({ where: { status: 'closed' } })
     });
 

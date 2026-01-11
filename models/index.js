@@ -5,6 +5,7 @@ const { Permission, RolePermission } = require('./Permission');
 const Media = require('./Media');
 const Publication = require('./Publication');
 const Career = require('./Career');
+const JobApplication = require('./JobApplication');
 const Hospital = require('./Hospital');
 const JobReferral = require('./JobReferral');
 
@@ -82,6 +83,17 @@ Career.belongsTo(User, {
   as: 'modifier'
 });
 
+// JobApplication associations
+Career.hasMany(JobApplication, {
+  foreignKey: 'jobId',
+  as: 'applications'
+});
+
+JobApplication.belongsTo(Career, {
+  foreignKey: 'jobId',
+  as: 'job'
+});
+
 // JobReferral associations
 JobReferral.belongsTo(Career, {
   foreignKey: 'convertedToJobId',
@@ -104,6 +116,7 @@ module.exports = {
   Media,
   Publication,
   Career,
+  JobApplication,
   Hospital,
   JobReferral
 };
