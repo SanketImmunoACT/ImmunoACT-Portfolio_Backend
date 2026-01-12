@@ -5,9 +5,12 @@ const logger = require('../config/logger');
 const { validationResult } = require('express-validator');
 
 // Generate JWT token
-const generateToken = (userId) => {
+const generateToken = (userId, role) => {
   return jwt.sign(
-    { userId },
+    { 
+      userId,
+      role 
+    },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRE || '24h' }
   );
@@ -113,7 +116,7 @@ const login = async (req, res) => {
     await user.save();
 
     // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, user.role);
 
     logger.auditLog('LOGIN_SUCCESS', user.username, {
       role: user.role,

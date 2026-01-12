@@ -24,17 +24,16 @@ const JobReferral = sequelize.define('JobReferral', {
       isEmail: true
     }
   },
-  referrerPhone: {
-    type: DataTypes.STRING(20),
-    allowNull: true
-  },
   referrerDepartment: {
     type: DataTypes.STRING(100),
     allowNull: true
   },
   referrerEmployeeId: {
     type: DataTypes.STRING(50),
-    allowNull: true
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
   },
 
   // Job Information
@@ -48,13 +47,9 @@ const JobReferral = sequelize.define('JobReferral', {
   },
   jobDescription: {
     type: DataTypes.TEXT,
-    allowNull: false
+    allowNull: true
   },
   department: {
-    type: DataTypes.STRING(100),
-    allowNull: false
-  },
-  location: {
     type: DataTypes.STRING(100),
     allowNull: false
   },
@@ -67,15 +62,6 @@ const JobReferral = sequelize.define('JobReferral', {
     type: DataTypes.ENUM('Entry Level', 'Mid Level', 'Senior Level', 'Executive'),
     allowNull: false,
     defaultValue: 'Mid Level'
-  },
-  salaryRange: {
-    type: DataTypes.STRING(100),
-    allowNull: true
-  },
-  urgency: {
-    type: DataTypes.ENUM('Low', 'Medium', 'High', 'Urgent'),
-    allowNull: false,
-    defaultValue: 'Medium'
   },
 
   // Candidate Information (if referring specific person)
@@ -105,7 +91,7 @@ const JobReferral = sequelize.define('JobReferral', {
 
   // Status and Processing
   status: {
-    type: DataTypes.ENUM('Pending', 'Under Review', 'Approved', 'Rejected', 'Converted to Job'),
+    type: DataTypes.ENUM('Pending', 'Under Review', 'Approved', 'Rejected'),
     allowNull: false,
     defaultValue: 'Pending'
   },
@@ -126,27 +112,12 @@ const JobReferral = sequelize.define('JobReferral', {
     type: DataTypes.DATE,
     allowNull: true
   },
-  
-  // Conversion tracking
-  convertedToJobId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: 'careers',
-      key: 'id'
-    }
-  },
 
   // Additional metadata
   source: {
     type: DataTypes.STRING(50),
     allowNull: false,
     defaultValue: 'Employee Referral'
-  },
-  tags: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: []
   }
 }, {
   tableName: 'job_referrals',
@@ -160,9 +131,6 @@ const JobReferral = sequelize.define('JobReferral', {
     },
     {
       fields: ['department']
-    },
-    {
-      fields: ['urgency']
     },
     {
       fields: ['createdAt']

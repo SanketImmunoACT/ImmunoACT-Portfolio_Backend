@@ -94,17 +94,6 @@ JobApplication.belongsTo(Career, {
   as: 'job'
 });
 
-// JobReferral associations
-JobReferral.belongsTo(Career, {
-  foreignKey: 'convertedToJobId',
-  as: 'convertedJob'
-});
-
-Career.hasMany(JobReferral, {
-  foreignKey: 'convertedToJobId',
-  as: 'referrals'
-});
-
 // Export all models
 module.exports = {
   sequelize,

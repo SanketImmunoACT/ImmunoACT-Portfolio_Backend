@@ -89,7 +89,6 @@ const getAllReferrals = async (req, res) => {
       limit = 10,
       status,
       department,
-      urgency,
       search,
       sortBy = 'createdAt',
       sortOrder = 'DESC'
@@ -101,12 +100,14 @@ const getAllReferrals = async (req, res) => {
     // Apply filters
     if (status) where.status = status;
     if (department) where.department = department;
-    if (urgency) where.urgency = urgency;
     if (search) {
+      const searchTerm = search.toLowerCase();
       where[Op.or] = [
-        { jobTitle: { [Op.like]: `%${search}%` } },
-        { referrerName: { [Op.like]: `%${search}%` } },
-        { candidateName: { [Op.like]: `%${search}%` } }
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('jobTitle')), 'LIKE', `%${searchTerm}%`),
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('referrerName')), 'LIKE', `%${searchTerm}%`),
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('candidateName')), 'LIKE', `%${searchTerm}%`),
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('referrerEmail')), 'LIKE', `%${searchTerm}%`),
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('department')), 'LIKE', `%${searchTerm}%`)
       ];
     }
 
@@ -114,20 +115,28 @@ const getAllReferrals = async (req, res) => {
       where,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [[sortBy, sortOrder]]
+      order: [[sortBy, sortOrder]],
+      include: []
     });
 
     // Get statistics
     const stats = await JobReferral.findAll({
       attributes: [
-        [sequelize.fn('COUNT', sequelize.col('id')), 'total'],
-        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'Pending' THEN 1 ELSE 0 END")), 'pending'],
-        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'Under Review' THEN 1 ELSE 0 END")), 'underReview'],
-        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'Approved' THEN 1 ELSE 0 END")), 'approved'],
-        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'Converted to Job' THEN 1 ELSE 0 END")), 'converted']
+        [sequelize.fn('COUNT', sequelize.col('id')), 'totalReferrals'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'Pending' THEN 1 ELSE 0 END")), 'pendingReferrals'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'Under Review' THEN 1 ELSE 0 END")), 'underReviewReferrals'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN status = 'Approved' THEN 1 ELSE 0 END")), 'approvedReferrals']
       ],
       raw: true
     });
+
+    // Ensure all values are numbers
+    const statsData = {
+      totalReferrals: parseInt(stats[0].totalReferrals) || 0,
+      pendingReferrals: parseInt(stats[0].pendingReferrals) || 0,
+      underReviewReferrals: parseInt(stats[0].underReviewReferrals) || 0,
+      approvedReferrals: parseInt(stats[0].approvedReferrals) || 0
+    };
 
     const responseData = {
       referrals: rows.map(row => row.toJSON ? row.toJSON() : row),
@@ -138,7 +147,7 @@ const getAllReferrals = async (req, res) => {
         hasNext: page * limit < count,
         hasPrev: page > 1
       },
-      stats: stats[0]
+      stats: statsData
     };
 
     res.json({
@@ -162,13 +171,7 @@ const getReferralById = async (req, res) => {
     const { id } = req.params;
 
     const referral = await JobReferral.findByPk(id, {
-      include: [
-        {
-          model: Career,
-          as: 'convertedJob',
-          required: false
-        }
-      ]
+      include: []
     });
 
     if (!referral) {
@@ -239,70 +242,6 @@ const updateReferralStatus = async (req, res) => {
   }
 };
 
-// Convert referral to job posting (Admin only)
-const convertToJob = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const jobData = req.body;
-
-    const referral = await JobReferral.findByPk(id);
-    if (!referral) {
-      return res.status(404).json({
-        success: false,
-        message: 'Job referral not found'
-      });
-    }
-
-    // Create new job posting based on referral
-    const newJob = await Career.create({
-      title: jobData.title || referral.jobTitle,
-      description: jobData.description || referral.jobDescription,
-      department: jobData.department || referral.department,
-      location: jobData.location || referral.location,
-      employmentType: jobData.employmentType || referral.employmentType,
-      experienceLevel: jobData.experienceLevel || referral.experienceLevel,
-      salaryRange: jobData.salaryRange || referral.salaryRange,
-      requirements: jobData.requirements || [],
-      responsibilities: jobData.responsibilities || [],
-      benefits: jobData.benefits || [],
-      status: 'Active',
-      postedBy: req.user.id,
-      source: 'Employee Referral'
-    });
-
-    // Update referral with conversion info
-    await referral.update({
-      status: 'Converted to Job',
-      convertedToJobId: newJob.id,
-      reviewedBy: req.user.name,
-      reviewedAt: new Date()
-    });
-
-    logger.info('Job referral converted to job posting', {
-      referralId: id,
-      jobId: newJob.id,
-      convertedBy: req.user.name
-    });
-
-    res.json({
-      success: true,
-      message: 'Job referral converted to job posting successfully',
-      data: {
-        referral,
-        job: newJob
-      }
-    });
-
-  } catch (error) {
-    logger.error('Error converting referral to job:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to convert referral to job',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-};
-
 // Delete referral (Admin only)
 const deleteReferral = async (req, res) => {
   try {
@@ -343,7 +282,6 @@ module.exports = {
   getAllReferrals,
   getReferralById,
   updateReferralStatus,
-  convertToJob,
   deleteReferral,
   upload
 };
