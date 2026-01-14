@@ -150,6 +150,85 @@ router.post('/create-all-users', async (req, res) => {
   }
 });
 
+// PUBLIC: Seed hospitals data (use only once for initial setup)
+router.post('/seed-hospitals-public', async (req, res) => {
+  try {
+    console.log('🏥 Starting hospital data seeding...');
+    
+    let insertedCount = 0;
+    let skippedCount = 0;
+    const errors = [];
+    
+    for (const hospital of allHospitalData) {
+      try {
+        // Check if hospital already exists
+        const [existing] = await sequelize.query(
+          'SELECT id FROM hospitals WHERE name = ? AND city = ? LIMIT 1',
+          { replacements: [hospital.name, hospital.city] }
+        );
+        
+        if (existing.length > 0) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Insert hospital
+        await sequelize.query(`
+          INSERT INTO hospitals (
+            name, address, city, state, zipCode, country,
+            latitude, longitude, phone, email, website, type,
+            isActive, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        `, {
+          replacements: [
+            hospital.name,
+            hospital.address,
+            hospital.city,
+            hospital.state,
+            null,
+            'India',
+            hospital.coordinates?.lat || null,
+            hospital.coordinates?.lng || null,
+            hospital.phone || null,
+            hospital.email || null,
+            hospital.website || null,
+            hospital.type || 'Private',
+            true
+          ]
+        });
+        
+        insertedCount++;
+      } catch (err) {
+        errors.push({ hospital: hospital.name, error: err.message });
+      }
+    }
+    
+    console.log(`✅ Hospital seeding completed: ${insertedCount} inserted, ${skippedCount} skipped`);
+    
+    // Get total count
+    const [results] = await sequelize.query('SELECT COUNT(*) as count FROM hospitals WHERE deletedAt IS NULL');
+    
+    res.json({
+      success: true,
+      message: 'Hospital data seeded successfully',
+      data: {
+        inserted: insertedCount,
+        skipped: skippedCount,
+        total: results[0].count,
+        errors: errors.length > 0 ? errors : undefined
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error seeding hospitals:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to seed hospital data',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 // Seed hospitals data (Super Admin only)
 router.post('/seed-hospitals', 
   authenticateToken,
