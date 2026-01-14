@@ -2,6 +2,57 @@ const express = require('express');
 const router = express.Router();
 const { sequelize } = require('../config/database');
 const { authenticateToken, authorize } = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
+
+// Create initial admin user (PUBLIC - use only once, then disable)
+router.post('/create-admin', async (req, res) => {
+  try {
+    // Check if admin already exists
+    const [existingAdmin] = await sequelize.query(
+      'SELECT id FROM users WHERE username = ? LIMIT 1',
+      { replacements: ['admin'] }
+    );
+
+    if (existingAdmin.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin user already exists. Please use login.'
+      });
+    }
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash('Admin@123456', 12);
+    
+    // Create admin user
+    await sequelize.query(`
+      INSERT INTO users (
+        username, email, password, firstName, lastName, role, isActive, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `, {
+      replacements: ['admin', 'admin@immunoact.com', hashedPassword, 'Super', 'Admin', 'super_admin', 1]
+    });
+    
+    console.log('✅ Admin user created successfully!');
+    
+    res.json({
+      success: true,
+      message: 'Admin user created successfully',
+      credentials: {
+        username: 'admin',
+        password: 'Admin@123456',
+        note: 'Please change the password after first login'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error creating admin user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create admin user',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
 
 // Setup referrals table (Super Admin only)
 router.post('/referrals-table', 
