@@ -3,6 +3,7 @@ const router = express.Router();
 const { sequelize } = require('../config/database');
 const { authenticateToken, authorize } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
+const allHospitalData = require('../scripts/hospitalData');
 
 // Create initial admin user (DISABLED - already created)
 // Uncomment only if you need to recreate admin user
@@ -148,6 +149,83 @@ router.post('/create-all-users', async (req, res) => {
     });
   }
 });
+
+// Seed hospitals data (Super Admin only)
+router.post('/seed-hospitals', 
+  authenticateToken,
+  authorize('super_admin'),
+  async (req, res) => {
+    try {
+      console.log('🏥 Starting hospital data seeding...');
+      
+      let insertedCount = 0;
+      let skippedCount = 0;
+      
+      for (const hospital of allHospitalData) {
+        // Check if hospital already exists
+        const [existing] = await sequelize.query(
+          'SELECT id FROM hospitals WHERE name = ? AND city = ? LIMIT 1',
+          { replacements: [hospital.name, hospital.city] }
+        );
+        
+        if (existing.length > 0) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Insert hospital
+        await sequelize.query(`
+          INSERT INTO hospitals (
+            name, address, city, state, zipCode, country,
+            latitude, longitude, phone, email, website, type,
+            isActive, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        `, {
+          replacements: [
+            hospital.name,
+            hospital.address,
+            hospital.city,
+            hospital.state,
+            null, // zipCode
+            'India',
+            hospital.coordinates?.lat || null,
+            hospital.coordinates?.lng || null,
+            hospital.phone || null,
+            hospital.email || null,
+            hospital.website || null,
+            hospital.type || 'Private',
+            true
+          ]
+        });
+        
+        insertedCount++;
+      }
+      
+      console.log(`✅ Hospital seeding completed: ${insertedCount} inserted, ${skippedCount} skipped`);
+      
+      // Get total count
+      const [results] = await sequelize.query('SELECT COUNT(*) as count FROM hospitals WHERE deletedAt IS NULL');
+      
+      res.json({
+        success: true,
+        message: 'Hospital data seeded successfully',
+        data: {
+          inserted: insertedCount,
+          skipped: skippedCount,
+          total: results[0].count
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Error seeding hospitals:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to seed hospital data',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+);
 
 // Setup referrals table (Super Admin only)
 router.post('/referrals-table', 
