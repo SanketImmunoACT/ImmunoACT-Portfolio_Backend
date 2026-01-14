@@ -4,7 +4,9 @@ const { sequelize } = require('../config/database');
 const { authenticateToken, authorize } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 
-// Create initial admin user (PUBLIC - use only once, then disable)
+// Create initial admin user (DISABLED - already created)
+// Uncomment only if you need to recreate admin user
+/*
 router.post('/create-admin', async (req, res) => {
   try {
     // Check if admin already exists
@@ -49,6 +51,99 @@ router.post('/create-admin', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create admin user',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+*/
+
+// Create all initial users (admin + office executive + hr manager)
+router.post('/create-all-users', async (req, res) => {
+  try {
+    const users = [
+      {
+        username: 'admin',
+        email: 'admin@immunoact.com',
+        password: 'Admin@123456',
+        firstName: 'Super',
+        lastName: 'Admin',
+        role: 'super_admin'
+      },
+      {
+        username: 'officeexec',
+        email: 'office@immunoact.com',
+        password: 'Office@123456',
+        firstName: 'Office',
+        lastName: 'Executive',
+        role: 'office_executive'
+      },
+      {
+        username: 'hrmanager',
+        email: 'hr@immunoact.com',
+        password: 'HR@123456',
+        firstName: 'HR',
+        lastName: 'Manager',
+        role: 'hr_manager'
+      }
+    ];
+
+    const createdUsers = [];
+    const skippedUsers = [];
+
+    for (const userData of users) {
+      // Check if user already exists
+      const [existing] = await sequelize.query(
+        'SELECT id FROM users WHERE username = ? LIMIT 1',
+        { replacements: [userData.username] }
+      );
+
+      if (existing.length > 0) {
+        skippedUsers.push(userData.username);
+        continue;
+      }
+
+      // Hash the password
+      const hashedPassword = await bcrypt.hash(userData.password, 12);
+      
+      // Create user
+      await sequelize.query(`
+        INSERT INTO users (
+          username, email, password, firstName, lastName, role, isActive, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      `, {
+        replacements: [
+          userData.username,
+          userData.email,
+          hashedPassword,
+          userData.firstName,
+          userData.lastName,
+          userData.role,
+          1
+        ]
+      });
+      
+      createdUsers.push({
+        username: userData.username,
+        password: userData.password,
+        role: userData.role
+      });
+    }
+    
+    console.log('✅ Users created:', createdUsers.map(u => u.username).join(', '));
+    
+    res.json({
+      success: true,
+      message: 'Users setup completed',
+      created: createdUsers,
+      skipped: skippedUsers,
+      note: 'Please change all default passwords after first login'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error creating users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create users',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
